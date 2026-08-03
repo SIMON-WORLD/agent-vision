@@ -42,9 +42,14 @@ python vision_bridge.py proxy \
 ```bash
 python vision_bridge.py doctor
 python vision_bridge.py see examples/sample-error-dialog.png -q "这个截图里有什么错误，错误码是什么"
+python vision_bridge.py see examples/sample-order-success.png -q "订单号和金额是多少"
 ```
 
-第一次运行需要先在 `.env` 里填好免费 Key。上面的测试图是程序生成的登录报错对话框；如果模型能准确读出“401 Unauthorized”和“重试/取消”按钮，就说明链路已经通了。
+第一次运行需要先在 `.env` 里填好免费 Key。`examples/` 里有两张程序生成的测试图：一张是登录报错对话框（“401 Unauthorized”是画在图片里的内容，不是 API 报错），一张是支付成功页；模型能准确读出里面的文字就说明链路已通。
+
+### `.env` 里 Key 要不要加引号
+
+不用加引号，直接写 `VISION_API_KEY={API Key ID}.{secret}` 即可；脚本会自动去掉值两侧的引号和空格。智谱的完整 Key 是 `API Key ID` 和 `secret` 用点连接，例如 `VISION_API_KEY=abc123.xxxxxxxx`。
 
 ## 常见问题
 
