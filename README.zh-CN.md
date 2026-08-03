@@ -34,6 +34,16 @@ flowchart LR
 
 ## 快速开始
 
+### Agent 一键配置（推荐）
+
+不需要懂终端和编程。把下面这句话发给你的 AI Agent：
+
+```text
+帮我安装并配置 codex-free-vision-bridge。请阅读 AGENT_INSTALL.zh-CN.md 并从头到尾执行。默认使用智谱免费服务，除非我指定其他服务商。
+```
+
+Agent 会帮你配置服务商、验证链路、备份并启用 Codex 粘贴图片，最后汇报改了什么。
+
 ### 前置要求
 
 - Python 3.8+
@@ -110,7 +120,7 @@ python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.
 
 ### 添加自己的服务商
 
-把 `providers.example.json` 复制为 `vision_bridge.py` 旁边的 `providers.json`，填入你的接口：
+不需要自己写文件。直接告诉 Agent“帮我添加某个服务商”，它会根据 `providers.example.json` 在 `vision_bridge.py` 旁边创建 `providers.json`：
 
 ```json
 {

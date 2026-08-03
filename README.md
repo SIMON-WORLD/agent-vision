@@ -34,6 +34,16 @@ flowchart LR
 
 ## Quick Start
 
+### Agent-driven setup (recommended)
+
+No terminal or programming skills are required. Paste this into your AI agent:
+
+```text
+Set up codex-free-vision-bridge for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
+```
+
+The agent will configure the provider, verify the pipeline, enable Codex pasted screenshots with backups, and report what it changed.
+
 ### Prerequisites
 
 - Python 3.8+
@@ -110,7 +120,7 @@ python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.
 
 ### Add your own provider
 
-Copy `providers.example.json` to `providers.json` next to `vision_bridge.py` and fill in your endpoint:
+You do not need to write files yourself. Ask your agent to add a provider; it creates `providers.json` next to `vision_bridge.py` from `providers.example.json`:
 
 ```json
 {
