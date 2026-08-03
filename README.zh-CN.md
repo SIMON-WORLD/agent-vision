@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
-[![Tests: 15/15](https://img.shields.io/badge/tests-15%2F15-passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
 
 给 Codex 里的 DeepSeek V4、GLM、MiMo 等纯文本模型补“看图”能力的免费方案：图片交给 OpenAI 兼容视觉模型转成文字，主模型只负责推理。不用 Ollama、不用 GPU、不用换模型。
 
