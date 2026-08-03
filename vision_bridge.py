@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""codex-free-vision-bridge: free vision for text-only Codex models.
+"""agent-vision (compatibility entry): free vision for text-only models.
 
 Two modes:
 

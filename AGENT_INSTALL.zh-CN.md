@@ -1,49 +1,52 @@
 # Agent 安装指南
 
-这个项目设计的初衷就是：用户只要会跟 AI Agent 对话，就能完成安装和配置，不需要懂命令行或编程。
+这个项目设计给“只要会和 AI Agent 聊天”的用户：不需要会终端，也不需要会编程。
 
-## 用户只需复制这一句话
+## 用户一句话指令
 
-把下面这句话发给你的 Agent（Codex、Claude 等都可以）：
+把下面这句话发给你的 Agent（Codex、OpenCode 等）：
 
 ```text
-帮我安装并配置 codex-free-vision-bridge。请阅读 AGENT_INSTALL.zh-CN.md 并从头到尾执行。默认使用智谱免费服务，除非我指定其他服务商。
+帮我安装并配置 agent-vision。请阅读 AGENT_INSTALL.zh-CN.md 并从头到尾执行。默认使用智谱免费服务，除非我指定其他服务商。
 ```
 
 ## Agent 执行清单
 
-1. 找到或克隆本仓库。除下列明确要求且已备份的 Codex 配置改动外，不要修改项目以外的文件。
-2. 询问用户想用哪个视觉服务商：`zhipu`（免费）、`dashscope`、`openai`、`gemini`、`groq`、`siliconflow`、`openrouter`。请用户提供对应的 API Key，或让用户自己把 Key 粘进 `.env`。
-3. 复制 `.env.example` 为 `.env`，写入 `VISION_API_KEY`，并根据 `python vision_bridge.py providers` 的输出设置 `VISION_BASE_URL` / `VISION_MODEL`。优先用 `--provider <id>` 运行时指定，避免硬编码接口地址。
-4. 验证链路：
+1. 找到或克隆项目仓库。除非下面步骤明确要求修改 Agent 配置，否则所有写入都留在项目目录内。
+2. 安装包：
 
    ```bash
-   python vision_bridge.py doctor
-   python vision_bridge.py see examples/sample-error-dialog.png -q "这个截图里有什么错误"
+   pip install .
    ```
 
-5. 可选：启用 Codex 粘贴图片。
-   - 修改 `~/.codex/config.toml` 前先备份。
-   - 只把 DeepSeek provider 的 `base_url` 指向 `http://127.0.0.1:19100/v1`。
-   - 如果桌面端仍提示“不支持图片输入”，说明模型目录把该模型标成纯文本；备份后把对应模型条目的 `input_modalities` 改为 `["text", "image"]`（CC Switch 用户文件为 `cc-switch-model-catalog.custom.json`）。
-   - 后台启动代理并确认端口：
+3. 询问用户选择视觉服务商：`zhipu`（免费）、`dashscope`、`openai`、`gemini`、`groq`、`siliconflow`、`openrouter`，或自定义 OpenAI 兼容接口。请用户提供对应的 API Key，或让用户自己粘贴到 `.env`。
+4. 运行引导式配置：
 
-     ```bash
-     python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream https://api.deepseek.com
-     ```
+   ```bash
+   agent-vision setup
+   ```
 
-   - 确认 `127.0.0.1:19100` 在监听，然后请用户完全退出并重启 Codex。
-6. 自定义服务商：如果用户要用的服务不在预设里，由 Agent 根据 `providers.example.json` 创建 `providers.json` 并校验，然后使用 `--provider <id>`。不要让用户手写 JSON。
-7. 绝不提交或上传 `.env`。最后向用户汇报：选择了哪个服务商、验证结果、备份了哪些文件。
+   向导会自动检测已安装的 Agent，写入 `.env`（自定义服务商还会写 `providers.json`），启动本地运行时并验证视觉 API。对 Codex 和 OpenCode，它还会先备份再自动修改 Agent 配置。
+5. 明确验证链路：
 
-## 回滚
+   ```bash
+   agent-vision status
+   agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
+   agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
+   ```
 
-- Codex 配置：恢复 `config.toml` 备份。
-- 模型目录：恢复 `cc-switch-model-catalog.custom.json` 备份。
-- 代理：停止监听 `127.0.0.1:19100` 的进程。
+6. 如果用户之后要求回滚被自动修改的 Agent：
 
-## Agent 必须遵守
+   ```bash
+   agent-vision rollback codex
+   agent-vision rollback opencode
+   ```
 
-- 修改全局 Codex 配置前必须征求用户同意，不能静默修改。
-- API Key 只留在本地 `.env`，不要打印出来。
-- 验证失败时停下来解释错误，不要猜测。
+7. 对 Claude Code 和 Cursor，执行 `agent-vision setup --agent claude --dry-run` 与 `agent-vision setup --agent cursor --dry-run` 会打印官方手动步骤。不要为这两个 Agent 编造配置键。
+8. 绝不提交或上传 `.env`。最后向用户汇报：选择的服务商、验证结果、备份了哪些文件。
+
+## Agent 守则
+
+- 修改全局 Agent 配置前必须先征得用户同意；每次自动修改前都会先生成带时间戳的备份。
+- API Key 只放在本地 `.env`，绝不打印。
+- 验证失败就停下来解释原因，不要猜测。

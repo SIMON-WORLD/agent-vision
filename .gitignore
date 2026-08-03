@@ -1,4 +1,7 @@
 .env
 __pycache__/
 *.pyc
+*.egg-info/
+.agent-vision-runtime.json
+.agent-vision-runtime.log
 tests/sample.png

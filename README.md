@@ -1,112 +1,69 @@
-# codex-free-vision-bridge
+# agent-vision
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![Release](https://img.shields.io/badge/release-v1.0.0-brightgreen)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
-Give text-only Codex models (DeepSeek V4, GLM, MiMo) image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; the main model keeps reasoning. No Ollama, no GPU, no model swap.
+**Give any AI agent vision capability.** If your agent's model is text-only (DeepSeek V4, GLM, MiMo, or any non-vision model), agent-vision adds image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; your main model keeps reasoning. No Ollama, no GPU, no model swap.
 
 **English** | [中文](README.zh-CN.md)
 
-## Features
+## Why
 
-- Single-file Python, zero third-party dependencies
-- `see` CLI for on-demand image analysis and OCR-style questions
-- Local strip proxy that rewrites pasted images into text before they reach the text-only upstream
-- Pluggable vision providers: built-in presets, custom `providers.json`, or plain `.env` overrides
-- Works with any OpenAI-compatible vision API; Zhipu `glm-4v-flash` (free) is the default
-- Passes the original Authorization header through, so the main model key stays in Codex config
-- Per-image + prompt cache, fail-open behavior, UTF-8 safe on Windows
-- Verified end-to-end: Codex desktop + DeepSeek V4 Flash + pasted screenshot
+Text-only agents cannot see pasted screenshots, local images, charts, or error dialogs. Replacing the model usually means paying more or changing your whole workflow. agent-vision sits between the agent and its model provider and does the conversion automatically:
+
+- Paste an image in your agent, and the local proxy rewrites it into text before the request reaches the text-only model.
+- Ask the agent to inspect a file, and the `see` command sends it to a vision API and returns a factual description.
+- Keep your existing model, key, and workflow. Everything is local, reversible, and free by default.
+
+## Demo
+
+![Order success](examples/sample-order-success.png)
+![Error dialog](examples/sample-error-dialog.png)
+
+```bash
+agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
+```
+
+```text
+===== examples/sample-order-success.png =====
+The order number is 202608030013, and the amount is 520.00 yuan.
+```
+
+```bash
+agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
+```
+
+```text
+===== examples/sample-error-dialog.png =====
+The error shown is "Unauthorized" with the error code 401.
+```
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  U[User pastes an image] --> C[Codex desktop]
-  C -->|request with image| P[vision bridge proxy :19100]
+  U[User pastes an image] --> A[Any AI agent]
+  A -->|request with image| P[agent-vision proxy :19100]
   P --> V[OpenAI-compatible vision API]
   V -->|text description| P
-  P -->|text-only request| D[DeepSeek / text-only upstream]
+  P -->|text-only request| M[DeepSeek / text-only model]
 ```
 
 `see` mode skips the proxy: the image path is sent directly to the vision API and the returned text is used by the agent.
 
-## Quick Start
+## Supported Agents
 
-### Agent-driven setup (recommended)
+| Agent | Integration | Status |
+|---|---|---|
+| Codex | Auto-patches `~/.codex/config.toml`, one-command setup, backup and rollback | Fully automatic |
+| OpenCode | Auto-patches `opencode.json` with an OpenAI-compatible provider | Fully automatic |
+| Claude Code | Detected and guided; Claude speaks the Anthropic protocol, so a protocol-compatible gateway is required | Manual steps provided |
+| Cursor | Detected and guided; Cursor exposes the base URL override only through Settings -> Models | Manual steps provided |
 
-No terminal or programming skills are required. Paste this into your AI agent:
+## Supported Vision Providers
 
-```text
-Set up codex-free-vision-bridge for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
-```
-
-The agent will configure the provider, verify the pipeline, enable Codex pasted screenshots with backups, and report what it changed.
-
-### Prerequisites
-
-- Python 3.8+
-- An OpenAI-compatible vision API key (Zhipu `glm-4v-flash` is free)
-
-### 1. Configure `.env`
-
-```bash
-copy .env.example .env        # Windows
-cp .env.example .env          # macOS / Linux
-```
-
-```bash
-VISION_API_KEY=your-full-key
-VISION_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-VISION_MODEL=glm-4v-flash
-```
-
-Zhipu keys use the `{API Key ID}.{secret}` format. Do not add quotes; the loader strips surrounding quotes and whitespace.
-
-### 2. Verify the pipeline
-
-```bash
-python vision_bridge.py doctor
-python vision_bridge.py see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
-python vision_bridge.py see examples/sample-order-success.png -q "What is the order number and amount?"
-```
-
-`examples/` contains two generated screenshots. Correct output means the key and pipeline work.
-
-### 3. Enable pasted screenshots in Codex
-
-This requires editing Codex configuration. The repository never modifies those files automatically; back them up first.
-
-1. Start the proxy:
-
-   ```bash
-   python vision_bridge.py proxy \
-     --listen 127.0.0.1:19100 \
-     --upstream https://api.deepseek.com
-   ```
-
-2. Point the DeepSeek provider `base_url` at the proxy in `~/.codex/config.toml`:
-
-   ```toml
-   base_url = "http://127.0.0.1:19100/v1"
-   ```
-
-3. If the desktop client rejects pasted images with "model does not support image inputs", the model catalog marks the model as text-only. Set `input_modalities` to `["text", "image"]` for the model entry (for CC Switch users: `cc-switch-model-catalog.custom.json`).
-
-4. Fully restart Codex and paste a screenshot.
-
-Known limitation: whether pasted images reach the API depends on the client. If the client still blocks images, use `see` mode with `SKILL.md` instead.
-
-## Vision Providers
-
-The bridge accepts any OpenAI-compatible vision API. Pick a built-in preset with `--provider`, or add your own without touching code.
-
-```bash
-python vision_bridge.py providers
-python vision_bridge.py see screenshot.png --provider dashscope -q "extract the text"
-python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.com
-```
+agent-vision accepts any OpenAI-compatible vision API. Built-in presets cover the most common ones; custom endpoints work too.
 
 | Provider | Model examples | Cost |
 |---|---|---|
@@ -116,49 +73,85 @@ python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.
 | Google Gemini | `gemini-2.0-flash` | Free tier available |
 | Groq | Qwen vision models | Free plan available |
 | SiliconFlow | Qwen2.5-VL series | Free quota for new users |
-| Self-hosted vLLM / Ollama | any VLM | Hardware only |
+| OpenRouter | Free and paid vision models | Mixed |
+| Self-hosted vLLM / Ollama | Any VLM | Hardware only |
 
-### Add your own provider
+## Install
 
-You do not need to write files yourself. Ask your agent to add a provider; it creates `providers.json` next to `vision_bridge.py` from `providers.example.json`:
+### One-click setup (recommended)
 
-```json
-{
-  "providers": [
-    {
-      "id": "my-provider",
-      "base_url": "https://your-api.example.com/v1",
-      "model": "your-vision-model",
-      "cost": "your pricing note"
-    }
-  ]
-}
+No terminal skills are required. Install Python 3.9+, clone the repository, then run:
+
+```bash
+git clone https://github.com/SIMON-WORLD/agent-vision.git
+cd agent-vision
+pip install .
+agent-vision setup
 ```
 
-Then use `--provider my-provider`. Entries in `providers.json` override built-in presets with the same id. If you prefer no config file, `VISION_BASE_URL`, `VISION_MODEL` and `VISION_API_KEY` in `.env` are always honored.
+The wizard detects your agent, lets you pick Free / Quality / Custom vision, writes the config with a backup, starts the local runtime, verifies the connection, and prints the final health status.
+
+You can also paste this into your agent and let it do the work:
+
+```text
+Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
+```
+
+### Runtime management
+
+```bash
+agent-vision start      # start the local vision proxy in the background
+agent-vision status     # show installation, runtime, provider, agent and vision status
+agent-vision restart    # restart the local proxy
+agent-vision stop       # stop the local proxy
+```
+
+### Rollback
+
+```bash
+agent-vision rollback codex
+agent-vision rollback opencode
+```
+
+Every auto-patch creates a timestamped backup before modifying anything, and `rollback` restores it.
 
 ## Configuration
+
+Copy `.env.example` to `.env` and fill in the vision API key. Zhipu keys use the `{API Key ID}.{secret}` format. Do not add quotes; the loader strips surrounding quotes and whitespace.
 
 | Variable | Default | Description |
 |---|---|---|
 | `VISION_API_KEY` | - | Vision API key (required) |
 | `VISION_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint |
 | `VISION_MODEL` | `glm-4v-flash` | Vision model name |
+| `VISION_PROXY_UPSTREAM` | - | Optional: URL the local proxy forwards to |
+| `VISION_PROXY_LISTEN` | `127.0.0.1:19100` | Optional: local proxy listen address |
+
+For a custom provider, ask your agent to add one to `providers.json`; no code changes are needed. Entries there override built-in presets with the same id.
 
 ## CLI Reference
 
 ```bash
-# On-demand image analysis
-python vision_bridge.py see <image>... [-q "question"] [--model MODEL] [--base-url URL] [--api-key KEY] [--no-cache]
+# Analyze images on demand
+agent-vision see <image>... [-q "question"] [--provider ID] [--no-cache]
 
-# Local image-strip proxy
-python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream <origin>
+# Run the local image-strip proxy in the foreground
+agent-vision proxy --listen 127.0.0.1:19100 --upstream <origin>
+
+# Guided setup
+agent-vision setup [--agent codex|opencode|claude|cursor] [--dry-run]
+
+# Health status
+agent-vision status [--test]
+
+# Runtime lifecycle
+agent-vision start | restart | stop
 
 # Configuration check
-python vision_bridge.py doctor
+agent-vision doctor
 
-# List available provider presets
-python vision_bridge.py providers
+# List vision provider presets
+agent-vision providers
 ```
 
 ## Testing
@@ -167,24 +160,13 @@ python vision_bridge.py providers
 python -m unittest discover -s tests -v
 ```
 
-## Troubleshooting
+## FAQ
 
-- **HTTP 429**: the free model is rate limited; retries are built in, or switch to another model.
-- **Garbled Chinese output on Windows**: the script forces UTF-8 on stdout/stderr; run `chcp 65001` or set `PYTHONIOENCODING=utf-8` for other tools.
-- **Vision API unreachable**: check `HTTP_PROXY` / `HTTPS_PROXY`; `urllib` reads them by default.
-- **Pasted image still rejected**: the client rejected the image before the proxy saw it; check the model catalog `input_modalities` or use `see` mode.
-- **Vision service failure**: proxy mode fails open and forwards the original request unchanged.
-
-## Privacy & Security
-
-Images are sent only to the configured vision provider (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.
-
-## Roadmap
-
-- Multi-provider fallback and health-based routing
-- Client-side hooks fallback for clients that reject pasted images
-- CI pipeline for unit tests
-- More free vision backends
+- **Do I need a GPU or Ollama?** No. Vision is handled by a remote OpenAI-compatible API; the default Zhipu `glm-4v-flash` is free.
+- **Is my agent key exposed?** No. The proxy passes the original Authorization header through, so your main model key stays in the agent's existing config.
+- **Can I use a paid provider?** Yes. Choose Quality or Custom in setup, or edit `.env` / `providers.json`.
+- **What happens if the vision API fails?** Proxy mode fails open and forwards the original request unchanged, so normal chat is not blocked.
+- **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.
 
 ## License
 

@@ -1,9 +1,9 @@
 ---
-name: free-vision-bridge
-description: 当主模型不支持图像输入，而用户要求查看、读取、描述或分析图片/截图时使用。调用 vision_bridge.py see 把图片交给免费视觉模型（默认智谱 glm-4v-flash），并把识别结果作为回答依据。
+name: agent-vision
+description: 当主模型不支持图像输入，而用户要求查看、读取、描述或分析图片/截图时使用。调用 agent-vision see 把图片交给免费视觉模型（默认智谱 glm-4v-flash），并把识别结果作为回答依据。
 ---
 
-# Free Vision Bridge
+# Agent Vision
 
 ## 何时使用
 
@@ -14,21 +14,21 @@ description: 当主模型不支持图像输入，而用户要求查看、读取�
 ## 工作流程
 
 1. 确认图片路径真实存在，支持 png / jpg / jpeg / webp / gif / bmp。
-2. 若本任务目录已配置 `.env`，直接运行：
+2. 若项目已配置 `.env`，直接运行：
 
    ```bash
-   python vision_bridge.py see <图片路径> -q "<用户的具体问题>"
+   agent-vision see <图片路径> -q "<用户的具体问题>"
    ```
 
-3. 若未配置 `.env`，显式传入环境变量：
+3. 若未安装或未配置，先运行 `agent-vision setup`；未安装时可用仓库根目录的兼容入口：
 
    ```bash
-   VISION_API_KEY=<key> VISION_BASE_URL=<url> VISION_MODEL=<model> \
-     python vision_bridge.py see <图片路径> -q "<问题>"
+   python vision_bridge.py see <图片路径> -q "<问题>"
    ```
 
 4. 把脚本输出作为事实依据，用中文向用户转述；后续追问基于识别文本继续处理。
-5. 如果本地代理正在运行（`proxy` 模式），粘贴图片会自动转成文字描述，不需要手动执行脚本；此时不要在回复里声称“直接看到图片”。
+5. 如果本地代理正在运行（`agent-vision start` 或 `proxy` 模式），粘贴图片会自动转成文字描述，不需要手动执行脚本；此时不要在回复里声称“直接看到图片”。
+6. 检查状态时运行 `agent-vision status`；需要回滚自动修改的 Agent 配置时运行 `agent-vision rollback codex` 或 `agent-vision rollback opencode`。
 
 ## 注意事项
 

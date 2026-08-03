@@ -4,46 +4,49 @@ This project is designed so that anyone who can chat with an AI agent can instal
 
 ## One-line prompt for the user
 
-Paste this into your agent (Codex, Claude, etc.):
+Paste this into your agent (Codex, OpenCode, etc.):
 
 ```text
-Set up codex-free-vision-bridge for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
+Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
 ```
 
 ## Checklist for the agent
 
-1. Locate the repository or clone it locally. Do not modify files outside the project unless a step below explicitly requires a backed-up Codex config change.
-2. Ask the user which vision provider they want: `zhipu` (free), `dashscope`, `openai`, `gemini`, `groq`, `siliconflow`, or `openrouter`. Ask the user to provide the matching API key, or let them paste it into `.env` themselves.
-3. Copy `.env.example` to `.env`, write `VISION_API_KEY`, and set `VISION_BASE_URL` / `VISION_MODEL` from the chosen preset (see `python vision_bridge.py providers`). Prefer using `--provider <id>` at runtime so no endpoint values need to be hardcoded.
-4. Verify the pipeline:
+1. Locate the repository or clone it locally. Keep all writes inside the project unless a step below explicitly requires a backed-up agent config change.
+2. Install the package:
 
    ```bash
-   python vision_bridge.py doctor
-   python vision_bridge.py see examples/sample-error-dialog.png -q "What error is shown?"
+   pip install .
    ```
 
-5. Optional: enable pasted screenshots in Codex.
-   - Back up `~/.codex/config.toml` before changing it.
-   - Point only the DeepSeek provider `base_url` at `http://127.0.0.1:19100/v1`.
-   - If the desktop client rejects pasted images, the model catalog marks the model text-only. With a backup, set `input_modalities` to `["text", "image"]` for the model entry (CC Switch users: `cc-switch-model-catalog.custom.json`).
-   - Start the proxy hidden and verify the port:
+3. Ask the user which vision provider they want: `zhipu` (free), `dashscope`, `openai`, `gemini`, `groq`, `siliconflow`, `openrouter`, or a custom OpenAI-compatible endpoint. Ask the user to provide the matching API key, or let them paste it into `.env` themselves.
+4. Run the guided setup:
 
-     ```bash
-     python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream https://api.deepseek.com
-     ```
+   ```bash
+   agent-vision setup
+   ```
 
-   - Confirm `127.0.0.1:19100` is listening, then ask the user to fully quit and restart Codex.
-6. Custom provider: if the user wants a provider not in the presets, create `providers.json` from `providers.example.json` with their endpoint, then use `--provider <id>`. Do not ask the user to write JSON; the agent creates and validates it.
-7. Never commit or upload `.env`. Report the chosen provider, the verification result, and any files that were backed up.
+   The wizard detects the installed agent, writes `.env` (and `providers.json` for custom providers), starts the local runtime, and verifies the vision API. For Codex and OpenCode it also backs up and patches the agent config automatically.
+5. Verify the pipeline explicitly:
 
-## Rollback
+   ```bash
+   agent-vision status
+   agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
+   agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
+   ```
 
-- Codex config: restore the `config.toml` backup.
-- Model catalog: restore the `cc-switch-model-catalog.custom.json` backup.
-- Proxy: stop the process listening on `127.0.0.1:19100`.
+6. If the user later asks to roll back an auto-patched agent:
+
+   ```bash
+   agent-vision rollback codex
+   agent-vision rollback opencode
+   ```
+
+7. For Claude Code and Cursor, `agent-vision setup --agent claude --dry-run` and `agent-vision setup --agent cursor --dry-run` print the official manual steps. Do not invent config keys for these agents.
+8. Never commit or upload `.env`. Report the chosen provider, the verification result, and any files that were backed up.
 
 ## Rules for the agent
 
-- Ask before changing global Codex configuration; never do it silently.
+- Ask before changing global agent configuration; every auto-patch creates a timestamped backup first.
 - Keep API keys inside the local `.env`; never print them.
 - If verification fails, stop and explain the error instead of guessing.
