@@ -1,27 +1,35 @@
 # codex-free-vision-bridge
 
-Give text-only Codex models (DeepSeek V4, GLM, MiMo) image understanding through a free OpenAI-compatible vision API. The vision model turns images into text; the main model keeps reasoning. No Ollama, no GPU, no model swap.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![Tests: 9/9](https://img.shields.io/badge/tests-9%2F9-passing-brightgreen)](tests/)
+
+Give text-only Codex models (DeepSeek V4, GLM, MiMo) image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; the main model keeps reasoning. No Ollama, no GPU, no model swap.
+
+**English** | [中文](README.zh-CN.md)
 
 ## Features
 
 - Single-file Python, zero third-party dependencies
-- On-demand `see` CLI and a local image-strip proxy for pasted screenshots
-- Defaults to Zhipu `glm-4v-flash` (free); any OpenAI-compatible vision API works
-- Passes the original Authorization header through, so the DeepSeek key stays in Codex config
+- `see` CLI for on-demand image analysis and OCR-style questions
+- Local strip proxy that rewrites pasted images into text before they reach the text-only upstream
+- Works with any OpenAI-compatible vision API; Zhipu `glm-4v-flash` (free) is the default
+- Passes the original Authorization header through, so the main model key stays in Codex config
 - Per-image + prompt cache, fail-open behavior, UTF-8 safe on Windows
-- Unit-tested image rewriting for OpenAI Chat Completions and Responses payloads
+- Verified end-to-end: Codex desktop + DeepSeek V4 Flash + pasted screenshot
 
 ## Architecture
 
-```text
-Codex (text-only model)
-  |
-  |-- see mode: image path -> vision_bridge.py see -> vision model -> text -> model reasons
-  |
-  |-- proxy mode: Codex -> http://127.0.0.1:19100 -> image rewritten to text -> DeepSeek upstream
+```mermaid
+flowchart LR
+  U[User pastes an image] --> C[Codex desktop]
+  C -->|request with image| P[vision bridge proxy :19100]
+  P --> V[OpenAI-compatible vision API]
+  V -->|text description| P
+  P -->|text-only request| D[DeepSeek / text-only upstream]
 ```
 
-Both modes share the same `.env` and vision API key. Proxy mode automates the image-to-text step inside the request path.
+`see` mode skips the proxy: the image path is sent directly to the vision API and the returned text is used by the agent.
 
 ## Quick Start
 
@@ -53,11 +61,11 @@ python vision_bridge.py see examples/sample-error-dialog.png -q "What error is s
 python vision_bridge.py see examples/sample-order-success.png -q "What is the order number and amount?"
 ```
 
-`examples/` contains two generated screenshots: an error dialog and an order-success page. If the model reads them correctly, the key and pipeline work.
+`examples/` contains two generated screenshots. Correct output means the key and pipeline work.
 
-### 3. Enable pasted screenshots in Codex (optional)
+### 3. Enable pasted screenshots in Codex
 
-This requires editing the global `~/.codex/config.toml`. The repository never modifies that file automatically; back it up first.
+This requires editing Codex configuration. The repository never modifies those files automatically; back them up first.
 
 1. Start the proxy:
 
@@ -67,16 +75,39 @@ This requires editing the global `~/.codex/config.toml`. The repository never mo
      --upstream https://api.deepseek.com
    ```
 
-2. Back up and edit `~/.codex/config.toml`, then point the DeepSeek provider `base_url` at the proxy:
+2. Point the DeepSeek provider `base_url` at the proxy in `~/.codex/config.toml`:
 
    ```toml
    base_url = "http://127.0.0.1:19100/v1"
    ```
 
-3. Restart Codex and paste a screenshot.
-4. To roll back, restore the original `base_url` or the backup from step 2.
+3. If the desktop client rejects pasted images with "model does not support image inputs", the model catalog marks the model as text-only. Set `input_modalities` to `["text", "image"]` for the model entry (for CC Switch users: `cc-switch-model-catalog.custom.json`).
 
-Known limitation: whether the Codex desktop client delivers pasted images to the API depends on the client implementation. If it still reports `unknown variant image_url` or blocks `view_image`, use `see` mode with `SKILL.md` instead.
+4. Fully restart Codex and paste a screenshot.
+
+Known limitation: whether pasted images reach the API depends on the client. If the client still blocks images, use `see` mode with `SKILL.md` instead.
+
+## Vision Providers
+
+The bridge accepts any OpenAI-compatible vision API. Change `VISION_BASE_URL` and `VISION_MODEL` to switch.
+
+| Provider | Model examples | Cost |
+|---|---|---|
+| Zhipu | `glm-4v-flash`, `glm-4.6v-flash` | Free |
+| Alibaba DashScope | `qwen-vl-max`, `qwen3-vl-flash` | Pay-as-you-go / free quota |
+| OpenAI | `gpt-4o-mini`, `gpt-4o` | Pay-as-you-go |
+| Google Gemini | `gemini-2.0-flash` | Free tier available |
+| Groq | Qwen vision models | Free plan available |
+| SiliconFlow | Qwen2.5-VL series | Free quota for new users |
+| Self-hosted vLLM / Ollama | any VLM | Hardware only |
+
+## Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `VISION_API_KEY` | - | Vision API key (required) |
+| `VISION_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint |
+| `VISION_MODEL` | `glm-4v-flash` | Vision model name |
 
 ## CLI Reference
 
@@ -91,26 +122,6 @@ python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream <origin>
 python vision_bridge.py doctor
 ```
 
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `VISION_API_KEY` | - | Vision API key (required) |
-| `VISION_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint |
-| `VISION_MODEL` | `glm-4v-flash` | Vision model name |
-
-## Model Selection
-
-The free `glm-4v-flash` handles clear screenshots, UI text and error messages well. For dense charts or small text, switch to a stronger model without touching the bridge:
-
-```bash
-VISION_MODEL=glm-4.6v-flash        # free, may hit rate limits
-VISION_MODEL=qwen-vl-max           # DashScope
-VISION_MODEL=gpt-4o-mini           # OpenAI
-```
-
-Update `VISION_BASE_URL` to the matching OpenAI-compatible endpoint.
-
 ## Testing
 
 ```bash
@@ -119,22 +130,22 @@ python -m unittest discover -s tests -v
 
 ## Troubleshooting
 
-- **HTTP 429**: the free model is rate limited; retries are built in, or switch back to `glm-4v-flash` / a different model.
-- **Garbled Chinese output on Windows**: the script forces UTF-8 on stdout/stderr; if other tools misbehave, run `chcp 65001` or set `PYTHONIOENCODING=utf-8`.
+- **HTTP 429**: the free model is rate limited; retries are built in, or switch to another model.
+- **Garbled Chinese output on Windows**: the script forces UTF-8 on stdout/stderr; run `chcp 65001` or set `PYTHONIOENCODING=utf-8` for other tools.
 - **Vision API unreachable**: check `HTTP_PROXY` / `HTTPS_PROXY`; `urllib` reads them by default.
-- **Pasted image still rejected**: the client rejected the image before the proxy saw it; use `see` mode.
+- **Pasted image still rejected**: the client rejected the image before the proxy saw it; check the model catalog `input_modalities` or use `see` mode.
 - **Vision service failure**: proxy mode fails open and forwards the original request unchanged.
 
 ## Privacy & Security
 
-Images are sent only to the configured vision provider (Zhipu by default). Do not send sensitive screenshots before reviewing the provider policy. `.env` is gitignored; never commit or share it.
+Images are sent only to the configured vision provider (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.
 
 ## Roadmap
 
+- Multi-provider fallback and health-based routing
 - Client-side hooks fallback for clients that reject pasted images
-- English and Chinese docs parity
 - CI pipeline for unit tests
-- Additional free vision backends
+- More free vision backends
 
 ## License
 
