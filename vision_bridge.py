@@ -53,6 +53,46 @@ DEFAULT_DESCRIBE_PROMPT = (
     "Do not guess. Reply in Chinese unless the user asks otherwise."
 )
 
+PROVIDERS: dict[str, dict[str, str]] = {
+    "zhipu": {
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4v-flash",
+        "cost": "free",
+    },
+    "dashscope": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-vl-max",
+        "cost": "paid",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "cost": "paid",
+    },
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "model": "gemini-2.0-flash",
+        "cost": "free-tier",
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "model": "qwen/qwen3.6-27b",
+        "cost": "free-plan",
+    },
+    "siliconflow": {
+        "base_url": "https://api.siliconflow.cn/v1",
+        "model": "Qwen/Qwen2.5-VL-72B-Instruct",
+        "cost": "free-quota",
+    },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "model": "qwen/qwen3-vl:free",
+        "cost": "free-or-paid",
+    },
+}
+
+CUSTOM_PROVIDERS_FILE = Path(__file__).resolve().parent / "providers.json"
+
 
 def load_dotenv(path: Path) -> dict[str, str]:
     """Parse a simple KEY=VALUE file; skip comments and blank lines."""
@@ -78,6 +118,53 @@ _ENV = {**_DOTENV, **os.environ}
 def cfg(name: str, default: str = "") -> str:
     value = _ENV.get(name)
     return value if value not in (None, "") else default
+
+
+def load_custom_providers() -> dict[str, dict[str, str]]:
+    """Load user-defined provider presets from providers.json."""
+    result: dict[str, dict[str, str]] = {}
+    if not CUSTOM_PROVIDERS_FILE.exists():
+        return result
+    try:
+        data = json.loads(CUSTOM_PROVIDERS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        print(f"warning: cannot load {CUSTOM_PROVIDERS_FILE}: {error}", file=sys.stderr)
+        return result
+    items = data if isinstance(data, list) else data.get("providers", [])
+    for item in items:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        result[str(item["id"])] = {
+            "base_url": str(item.get("base_url", "")).strip(),
+            "model": str(item.get("model", "")).strip(),
+            "cost": str(item.get("cost", "")).strip(),
+            "note": str(item.get("note", "")).strip(),
+        }
+    return result
+
+
+def all_providers() -> dict[str, dict[str, str]]:
+    merged = dict(PROVIDERS)
+    merged.update(load_custom_providers())
+    return merged
+
+
+def resolve_provider(
+    provider: str | None,
+    base_url: str | None,
+    model: str | None,
+) -> tuple[str, str]:
+    """Resolve base_url and model from --provider, explicit flags, then .env."""
+    if provider:
+        preset = all_providers().get(provider)
+        if not preset:
+            raise ValueError(f"unknown provider: {provider}")
+        resolved_base = base_url or preset.get("base_url") or cfg("VISION_BASE_URL", DEFAULT_VISION_BASE_URL)
+        resolved_model = model or preset.get("model") or cfg("VISION_MODEL", DEFAULT_VISION_MODEL)
+    else:
+        resolved_base = base_url or cfg("VISION_BASE_URL", DEFAULT_VISION_BASE_URL)
+        resolved_model = model or cfg("VISION_MODEL", DEFAULT_VISION_MODEL)
+    return resolved_base, resolved_model
 
 
 def guess_mime(path: str) -> str:
@@ -297,9 +384,16 @@ def _focus_text(content: list[object]) -> str:
 
 
 class _Rewrite:
-    def __init__(self, max_images: int = MAX_IMAGES_PER_REQUEST) -> None:
+    def __init__(
+        self,
+        max_images: int = MAX_IMAGES_PER_REQUEST,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         self.replaced = 0
         self.max_images = max_images
+        self.model = model
+        self.base_url = base_url
 
     def describe_data_url(self, data_url: str, focus: str) -> str | None:
         match = DATA_URL_RE.match(data_url)
@@ -319,7 +413,13 @@ class _Rewrite:
                 + DEFAULT_DESCRIBE_PROMPT
             )
         try:
-            return describe_bytes(data, mime, prompt)
+            return describe_bytes(
+                data,
+                mime,
+                prompt,
+                model=self.model,
+                base_url=self.base_url,
+            )
         except Exception as error:
             print(f"vision rewrite failed, passing image through: {error}", file=sys.stderr)
             return None
@@ -347,7 +447,12 @@ class _Rewrite:
         return out
 
 
-def rewrite_body(body: bytes, max_images: int = MAX_IMAGES_PER_REQUEST) -> tuple[bytes, int]:
+def rewrite_body(
+    body: bytes,
+    max_images: int = MAX_IMAGES_PER_REQUEST,
+    model: str | None = None,
+    base_url: str | None = None,
+) -> tuple[bytes, int]:
     """Replace image content parts with text. Returns (body, replaced_count)."""
     try:
         payload = json.loads(body.decode("utf-8"))
@@ -355,7 +460,7 @@ def rewrite_body(body: bytes, max_images: int = MAX_IMAGES_PER_REQUEST) -> tuple
         return body, 0
     if not isinstance(payload, dict):
         return body, 0
-    rewrite = _Rewrite(max_images=max_images)
+    rewrite = _Rewrite(max_images=max_images, model=model, base_url=base_url)
     for item in payload.get("input") or []:
         if isinstance(item, dict) and isinstance(item.get("content"), list):
             item["content"] = rewrite.rewrite_content(item["content"], chat=False)
@@ -373,7 +478,16 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def _forward(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b""
-        new_body, _ = rewrite_body(body, max_images=self.server.max_images) if body else (body, 0)
+        new_body, _ = (
+            rewrite_body(
+                body,
+                max_images=self.server.max_images,
+                model=getattr(self.server, "model", None),
+                base_url=getattr(self.server, "base_url", None),
+            )
+            if body
+            else (body, 0)
+        )
         headers: dict[str, str] = {}
         for key, value in self.headers.items():
             lower = key.lower()
@@ -439,9 +553,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
 
-def run_proxy(listen: str, upstream: str, max_images: int) -> int:
+def run_proxy(listen: str, upstream: str, max_images: int, provider: str | None = None) -> int:
     if not cfg("VISION_API_KEY"):
         print("warning: VISION_API_KEY not configured; images will pass through unchanged", file=sys.stderr)
+    try:
+        base_url, model = resolve_provider(provider, None, None)
+    except ValueError as error:
+        raise SystemExit(str(error))
     host, _, port = listen.rpartition(":")
     parsed = urlparse(upstream)
     if parsed.scheme not in ("http", "https"):
@@ -449,6 +567,8 @@ def run_proxy(listen: str, upstream: str, max_images: int) -> int:
     server = ThreadingHTTPServer((host or "127.0.0.1", int(port or 19100)), ProxyHandler)
     server.upstream = upstream.rstrip("/")
     server.max_images = max_images
+    server.model = model
+    server.base_url = base_url
     print(f"vision bridge proxy listening on {listen} -> {upstream}", flush=True)
     try:
         server.serve_forever()
@@ -459,15 +579,20 @@ def run_proxy(listen: str, upstream: str, max_images: int) -> int:
 
 def cmd_see(args: argparse.Namespace) -> int:
     exit_code = 0
+    try:
+        base_url, model = resolve_provider(args.provider, args.base_url, args.model)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
     for index, image in enumerate(args.images, start=1):
         label = image if len(args.images) == 1 else f"[{index}/{len(args.images)}] {image}"
         try:
             text = describe_file(
                 image,
                 args.question,
-                model=args.model,
+                model=model,
                 api_key=args.api_key,
-                base_url=args.base_url,
+                base_url=base_url,
                 use_cache=not args.no_cache,
             )
         except (OSError, ValueError, RuntimeError) as error:
@@ -487,6 +612,20 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 0 if cfg("VISION_API_KEY") else 1
 
 
+def cmd_providers(_args: argparse.Namespace) -> int:
+    providers = all_providers()
+    if not providers:
+        print("no providers configured")
+        return 0
+    width = max(len(pid) for pid in providers)
+    for pid in sorted(providers):
+        preset = providers[pid]
+        cost = preset.get("cost") or "n/a"
+        note = preset.get("note") or ""
+        print(f"{pid:<{width}}  model={preset.get('model') or '-'}  cost={cost}  {note}".rstrip())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vision_bridge", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -497,6 +636,7 @@ def build_parser() -> argparse.ArgumentParser:
     see.add_argument("--model", default=None)
     see.add_argument("--base-url", default=None)
     see.add_argument("--api-key", default=None)
+    see.add_argument("--provider", default=None, help="provider preset id, see `providers`")
     see.add_argument("--no-cache", action="store_true")
     see.set_defaults(handler=cmd_see)
 
@@ -504,10 +644,14 @@ def build_parser() -> argparse.ArgumentParser:
     proxy.add_argument("--listen", default="127.0.0.1:19100")
     proxy.add_argument("--upstream", required=True, help="origin to forward to, e.g. https://api.deepseek.com")
     proxy.add_argument("--max-images", type=int, default=MAX_IMAGES_PER_REQUEST)
+    proxy.add_argument("--provider", default=None, help="provider preset id, see `providers`")
     proxy.set_defaults(handler=run_proxy)
 
     doctor = sub.add_parser("doctor", help="check vision config")
     doctor.set_defaults(handler=cmd_doctor)
+
+    providers = sub.add_parser("providers", help="list available vision provider presets")
+    providers.set_defaults(handler=cmd_providers)
     return parser
 
 
@@ -515,7 +659,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "proxy":
-        return args.handler(args.listen, args.upstream, args.max_images)
+        return args.handler(args.listen, args.upstream, args.max_images, args.provider)
     return args.handler(args)
 
 

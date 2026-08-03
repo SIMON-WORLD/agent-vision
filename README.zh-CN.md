@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
-[![Tests: 9/9](https://img.shields.io/badge/tests-9%2F9-passing-brightgreen)](tests/)
+[![Tests: 15/15](https://img.shields.io/badge/tests-15%2F15-passing-brightgreen)](tests/)
 
 给 Codex 里的 DeepSeek V4、GLM、MiMo 等纯文本模型补“看图”能力的免费方案：图片交给 OpenAI 兼容视觉模型转成文字，主模型只负责推理。不用 Ollama、不用 GPU、不用换模型。
 
@@ -13,6 +13,7 @@
 - 单文件 Python，零第三方依赖
 - `see` 命令行按需识图，可做描述、问答、OCR 式提取
 - 本地剥离代理：粘贴的图片在到达纯文本上游之前自动转成文字
+- 可插拔视觉服务商：内置预设、自定义 `providers.json`、或直接改 `.env`
 - 支持任意 OpenAI 兼容视觉 API，默认智谱 `glm-4v-flash`（免费）
 - 原样透传 Authorization，主模型 key 不用二次保存
 - 按“图片+问题”缓存、fail-open 不卡聊天、Windows 下 UTF-8 安全
@@ -89,7 +90,13 @@ python vision_bridge.py see examples/sample-order-success.png -q "订单号和�
 
 ## 视觉模型选择
 
-桥接层支持任意 OpenAI 兼容视觉 API，改 `VISION_BASE_URL` 和 `VISION_MODEL` 即可切换。
+桥接层支持任意 OpenAI 兼容视觉 API。可以用 `--provider` 选择内置预设，也可以不改代码添加自己的服务商。
+
+```bash
+python vision_bridge.py providers
+python vision_bridge.py see 截图.png --provider dashscope -q "提取文字"
+python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.com
+```
 
 | 服务商 | 模型示例 | 费用 |
 |---|---|---|
@@ -100,6 +107,25 @@ python vision_bridge.py see examples/sample-order-success.png -q "订单号和�
 | Groq | Qwen 视觉模型 | 有免费计划 |
 | 硅基流动 | Qwen2.5-VL 系列 | 新用户免费额度 |
 | 自部署 vLLM / Ollama | 任意 VLM | 仅硬件成本 |
+
+### 添加自己的服务商
+
+把 `providers.example.json` 复制为 `vision_bridge.py` 旁边的 `providers.json`，填入你的接口：
+
+```json
+{
+  "providers": [
+    {
+      "id": "my-provider",
+      "base_url": "https://your-api.example.com/v1",
+      "model": "your-vision-model",
+      "cost": "your pricing note"
+    }
+  ]
+}
+```
+
+然后用 `--provider my-provider`。`providers.json` 里同 id 的条目会覆盖内置预设。不想用配置文件时，`.env` 里的 `VISION_BASE_URL`、`VISION_MODEL`、`VISION_API_KEY` 始终生效。
 
 ## 配置项
 
@@ -120,6 +146,9 @@ python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream <上游地址>
 
 # 配置检查
 python vision_bridge.py doctor
+
+# 查看可用服务商预设
+python vision_bridge.py providers
 ```
 
 ## 测试

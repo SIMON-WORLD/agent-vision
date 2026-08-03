@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
-[![Tests: 9/9](https://img.shields.io/badge/tests-9%2F9-passing-brightgreen)](tests/)
+[![Tests: 15/15](https://img.shields.io/badge/tests-15%2F15-passing-brightgreen)](tests/)
 
 Give text-only Codex models (DeepSeek V4, GLM, MiMo) image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; the main model keeps reasoning. No Ollama, no GPU, no model swap.
 
@@ -13,6 +13,7 @@ Give text-only Codex models (DeepSeek V4, GLM, MiMo) image understanding through
 - Single-file Python, zero third-party dependencies
 - `see` CLI for on-demand image analysis and OCR-style questions
 - Local strip proxy that rewrites pasted images into text before they reach the text-only upstream
+- Pluggable vision providers: built-in presets, custom `providers.json`, or plain `.env` overrides
 - Works with any OpenAI-compatible vision API; Zhipu `glm-4v-flash` (free) is the default
 - Passes the original Authorization header through, so the main model key stays in Codex config
 - Per-image + prompt cache, fail-open behavior, UTF-8 safe on Windows
@@ -89,7 +90,13 @@ Known limitation: whether pasted images reach the API depends on the client. If 
 
 ## Vision Providers
 
-The bridge accepts any OpenAI-compatible vision API. Change `VISION_BASE_URL` and `VISION_MODEL` to switch.
+The bridge accepts any OpenAI-compatible vision API. Pick a built-in preset with `--provider`, or add your own without touching code.
+
+```bash
+python vision_bridge.py providers
+python vision_bridge.py see screenshot.png --provider dashscope -q "extract the text"
+python vision_bridge.py proxy --provider openai --upstream https://api.deepseek.com
+```
 
 | Provider | Model examples | Cost |
 |---|---|---|
@@ -100,6 +107,25 @@ The bridge accepts any OpenAI-compatible vision API. Change `VISION_BASE_URL` an
 | Groq | Qwen vision models | Free plan available |
 | SiliconFlow | Qwen2.5-VL series | Free quota for new users |
 | Self-hosted vLLM / Ollama | any VLM | Hardware only |
+
+### Add your own provider
+
+Copy `providers.example.json` to `providers.json` next to `vision_bridge.py` and fill in your endpoint:
+
+```json
+{
+  "providers": [
+    {
+      "id": "my-provider",
+      "base_url": "https://your-api.example.com/v1",
+      "model": "your-vision-model",
+      "cost": "your pricing note"
+    }
+  ]
+}
+```
+
+Then use `--provider my-provider`. Entries in `providers.json` override built-in presets with the same id. If you prefer no config file, `VISION_BASE_URL`, `VISION_MODEL` and `VISION_API_KEY` in `.env` are always honored.
 
 ## Configuration
 
@@ -120,6 +146,9 @@ python vision_bridge.py proxy --listen 127.0.0.1:19100 --upstream <origin>
 
 # Configuration check
 python vision_bridge.py doctor
+
+# List available provider presets
+python vision_bridge.py providers
 ```
 
 ## Testing

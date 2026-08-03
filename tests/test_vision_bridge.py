@@ -175,5 +175,71 @@ class CliTests(unittest.TestCase):
             self.assertEqual(vb.cmd_doctor(mock.Mock()), 1)
 
 
+class ProviderTests(unittest.TestCase):
+    def test_builtin_providers_include_zhipu(self):
+        providers = vb.all_providers()
+        self.assertEqual(providers["zhipu"]["model"], "glm-4v-flash")
+        self.assertIn("dashscope", providers)
+        self.assertIn("openai", providers)
+
+    def test_custom_providers_merge(self):
+        tmp = Path(__file__).resolve().parent / "tmp-providers.json"
+        tmp.write_text(
+            json.dumps(
+                {
+                    "providers": [
+                        {
+                            "id": "my-provider",
+                            "base_url": "https://example.com/v1",
+                            "model": "my-vlm",
+                            "cost": "free",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        try:
+            with mock.patch.object(vb, "CUSTOM_PROVIDERS_FILE", tmp):
+                providers = vb.all_providers()
+            self.assertEqual(providers["my-provider"]["model"], "my-vlm")
+            self.assertEqual(providers["zhipu"]["model"], "glm-4v-flash")
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def test_resolve_provider_preset(self):
+        base_url, model = vb.resolve_provider("zhipu", None, None)
+        self.assertEqual(base_url, "https://open.bigmodel.cn/api/paas/v4")
+        self.assertEqual(model, "glm-4v-flash")
+
+    def test_resolve_provider_unknown_raises(self):
+        with self.assertRaises(ValueError):
+            vb.resolve_provider("not-a-provider", None, None)
+
+    def test_see_uses_provider_preset(self):
+        path = str(Path(__file__).resolve().parent / "sample.png")
+        Path(path).write_bytes(png_bytes())
+        captured = {}
+
+        def fake_describe_file(image, prompt, **kwargs):
+            captured["model"] = kwargs.get("model")
+            captured["base_url"] = kwargs.get("base_url")
+            return "ok"
+
+        with mock.patch.object(vb, "describe_file", side_effect=fake_describe_file):
+            with mock.patch("sys.stdout", new_callable=io.StringIO):
+                code = vb.main(["see", path, "--provider", "zhipu", "-q", "什么"])
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["model"], "glm-4v-flash")
+        self.assertEqual(captured["base_url"], "https://open.bigmodel.cn/api/paas/v4")
+
+    def test_providers_command_lists_presets(self):
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            code = vb.main(["providers"])
+        self.assertEqual(code, 0)
+        self.assertIn("zhipu", out.getvalue())
+        self.assertIn("dashscope", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
