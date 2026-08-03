@@ -35,6 +35,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
+
+
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 DEFAULT_VISION_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 DEFAULT_VISION_MODEL = "glm-4v-flash"
