@@ -418,20 +418,37 @@ def image_url_from_part(part: object) -> str | None:
 
 def load_url_image(url: str) -> tuple[str, bytes]:
     """Download an image URL and return (mime, bytes)."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"image URL must use http:// or https://: {url}")
     try:
         response = urllib.request.urlopen(url, timeout=60)
     except urllib.error.URLError as error:
         raise ValueError(f"cannot download image URL: {error.reason}")
     try:
-        data = response.read()
+        length = response.headers.get("Content-Length")
+        if length:
+            try:
+                if int(length) > MAX_IMAGE_BYTES:
+                    raise ValueError(f"image too large: {int(length) / 1024 / 1024:.1f} MB")
+            except ValueError:
+                pass
+        data = bytearray()
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > MAX_IMAGE_BYTES:
+                raise ValueError(f"image too large: {len(data) / 1024 / 1024:.1f} MB")
     finally:
         response.close()
     mime = response.headers.get_content_type() or guess_mime(url)
+    if not mime.startswith("image/"):
+        mime = guess_mime(url)
     if not data:
         raise ValueError(f"empty image from URL: {url}")
-    if len(data) > MAX_IMAGE_BYTES:
-        raise ValueError(f"image too large: {len(data) / 1024 / 1024:.1f} MB")
-    return mime, data
+    return mime, bytes(data)
 
 
 def describe_source(
@@ -493,23 +510,55 @@ def _find_input_image(obj: object) -> tuple[str, bytes] | None:
     return None
 
 
-def find_latest_pasted_image(session_dir: Path | None = None) -> tuple[str, bytes]:
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _iter_reversed_lines(handle: object, chunk_size: int = 64 * 1024) -> str:
+    """Yield text lines from a binary file from the end, without loading it all."""
+    handle.seek(0, os.SEEK_END)
+    tail = b""
+    pos = handle.tell()
+    while pos > 0:
+        read_size = min(chunk_size, pos)
+        pos -= read_size
+        handle.seek(pos)
+        tail = handle.read(read_size) + tail
+        lines = tail.split(b"\n")
+        tail = lines[0]
+        for line in reversed(lines[1:]):
+            yield line.decode("utf-8", errors="replace")
+    if tail:
+        yield tail.decode("utf-8", errors="replace")
+
+
+def find_latest_pasted_image(
+    session_dir: Path | None = None,
+    max_files: int = 20,
+) -> tuple[str, bytes]:
     """Return (mime, bytes) of the most recent image pasted into Codex.
 
     Codex stores pasted images as ``input_image`` parts with base64 data URLs
-    in ``~/.codex/sessions/**/*.jsonl`` (or ``$CODEX_HOME/sessions``). Newest
-    session files are scanned first, and each file is scanned backwards so the
-    first hit is the latest pasted image.
+    in ``~/.codex/sessions/**/*.jsonl`` (or ``$CODEX_HOME/sessions``). Only the
+    newest ``max_files`` session files are scanned; each file is read backwards
+    so the first hit is the latest pasted image.
     """
     codex_home = os.environ.get("CODEX_HOME")
     root = Path(session_dir) if session_dir is not None else Path(codex_home or Path.home() / ".codex") / "sessions"
     if not root.is_dir():
         raise ValueError(f"Codex sessions directory not found: {root}")
-    files = sorted(root.rglob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
+    try:
+        candidates = list(root.rglob("*.jsonl"))
+    except OSError:
+        candidates = []
+    files = sorted(candidates, key=_safe_mtime, reverse=True)[: max_files]
     for file in files:
         try:
-            with file.open("r", encoding="utf-8", errors="replace") as handle:
-                for line in reversed(handle.readlines()):
+            with file.open("rb") as handle:
+                for line in _iter_reversed_lines(handle):
                     if "input_image" not in line:
                         continue
                     try:
@@ -1466,8 +1515,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     see = sub.add_parser("see", help="describe/analyze local images, image URLs, or the latest pasted image")
-    see.add_argument("images", nargs="*", help="local image paths or http(s) image URLs")
-    see.add_argument("--latest", action="store_true", help="recover and analyze the latest image pasted into Codex from session files")
+    see_group = see.add_mutually_exclusive_group()
+    see_group.add_argument("images", nargs="*", help="local image paths or http(s) image URLs")
+    see_group.add_argument("--latest", action="store_true", help="recover and analyze the latest image pasted into Codex from session files")
     see.add_argument("--task", choices=list(TASK_PROMPTS), default="describe", help="task preset: describe, ocr, ui, chart")
     see.add_argument("-q", "--question", default=None, help="question for the vision model (overrides --task)")
     see.add_argument("--model", default=None)

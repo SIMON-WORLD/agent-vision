@@ -176,6 +176,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("specify image paths/URLs or use --latest", err.getvalue())
 
+    def test_see_latest_and_images_mutually_exclusive(self):
+        path = str(Path(__file__).resolve().parent / "sample.png")
+        Path(path).write_bytes(png_bytes())
+        with self.assertRaises(SystemExit) as ctx:
+            vb.main(["see", path, "--latest"])
+        self.assertEqual(ctx.exception.code, 2)
+
     def test_see_latest_describes_pasted_image(self):
         captured = {}
 
@@ -235,11 +242,20 @@ class FakeHeaders:
     def get_content_type(self):
         return "image/png"
 
+    def get(self, key, default=None):
+        return default
+
 
 class FakeResponse:
     headers = FakeHeaders()
 
-    def read(self):
+    def __init__(self):
+        self._done = False
+
+    def read(self, size=-1):
+        if self._done:
+            return b""
+        self._done = True
         return png_bytes()
 
     def close(self):
@@ -267,6 +283,24 @@ class ImageSourceTests(unittest.TestCase):
         self.assertEqual(text, "ok")
         self.assertEqual(captured["data"], png_bytes())
         self.assertEqual(captured["prompt"], "描述")
+
+    def test_load_url_image_rejects_non_http_scheme(self):
+        with self.assertRaises(ValueError):
+            vb.load_url_image("file:///C:/tmp/a.png")
+
+    def test_load_url_image_rejects_oversized_body(self):
+        class HugeResponse:
+            headers = FakeHeaders()
+
+            def read(self, size=-1):
+                return b"x" * (vb.MAX_IMAGE_BYTES + 1)
+
+            def close(self):
+                pass
+
+        with mock.patch.object(vb.urllib.request, "urlopen", return_value=HugeResponse()):
+            with self.assertRaises(ValueError):
+                vb.load_url_image("https://example.com/huge.png")
 
 
 class LatestImageTests(unittest.TestCase):
@@ -307,6 +341,35 @@ class LatestImageTests(unittest.TestCase):
             os.utime(newer, (2000000, 2000000))
             mime, data = vb.find_latest_pasted_image(session_dir=session_dir)
         self.assertEqual(data, b"newest-image")
+
+    def test_find_latest_skips_corrupt_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions"
+            session_dir.mkdir(parents=True)
+            (session_dir / "rollout.jsonl").write_text(
+                "{not-json}\n" + self._session_line(png_bytes()) + "\n",
+                encoding="utf-8",
+            )
+            mime, data = vb.find_latest_pasted_image(session_dir=session_dir)
+        self.assertEqual(data, png_bytes())
+
+    def test_find_latest_skips_non_data_url_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions"
+            session_dir.mkdir(parents=True)
+            line = json.dumps(
+                {
+                    "timestamp": "2026-08-04T00:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "content": [{"type": "input_image", "image_url": "https://example.com/a.png", "detail": "high"}],
+                    },
+                }
+            )
+            (session_dir / "rollout.jsonl").write_text(line + "\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                vb.find_latest_pasted_image(session_dir=session_dir)
 
     def test_find_latest_pasted_image_missing_raises(self):
         with tempfile.TemporaryDirectory() as tmp:

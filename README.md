@@ -157,7 +157,7 @@ python -m unittest discover -s tests -v
 - **Can the agent call Codex's built-in `view_image`?** Yes. `view_image` sends the local image in a later request, and the same proxy converts it to text before the text-only model sees it. If your client refuses pasted images entirely, run `agent-vision see --latest` to recover the last image pasted into Codex from session files and analyze it directly.
 - **Can I use a paid provider?** Yes. Choose Quality or Custom in setup, or edit `.env` / `providers.json`.
 - **What happens if the vision API fails?** Proxy mode fails open and forwards the original request unchanged, so normal chat is not blocked.
-- **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.
+- **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `see --latest` extracts only the image bytes from Codex session files and never reads or sends conversation text. `.env` is gitignored; never commit or share it.
 
 ## License
 

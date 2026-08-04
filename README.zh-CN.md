@@ -157,7 +157,7 @@ python -m unittest discover -s tests -v
 - **Agent 能调用 Codex 内置的 `view_image` 吗？** 可以。`view_image` 会把本地图片放进后续请求，同一个代理会在纯文本模型看到之前转成文字。如果客户端彻底拒绝粘贴图片，可以运行 `agent-vision see --latest`，从 Codex 会话文件恢复最近粘贴的图片并直接识别。
 - **可以用付费服务吗？** 可以。在 setup 里选 Quality 或 Custom，或者直接改 `.env` / `providers.json`。
 - **视觉 API 挂了会怎样？** 代理模式 fail-open，原请求原样转发，不会阻塞正常聊天。
-- **图片隐私如何？** 图片只会发送到你配置的服务商（默认智谱）。发送敏感截图前请先查看对方隐私政策。`.env` 已被 `.gitignore` 排除，不要提交或分享。
+- **图片隐私如何？** 图片只会发送到你配置的服务商（默认智谱）。发送敏感截图前请先查看对方隐私政策。`see --latest` 只从 Codex 会话文件提取图片字节，不读取或发送对话文本。`.env` 已被 `.gitignore` 排除，不要提交或分享。
 
 ## License
 
