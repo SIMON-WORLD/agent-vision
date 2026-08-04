@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -20,3 +20,29 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  smoke-install:
+    name: smoke install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package from source
+        run: python -m pip install .
+      - name: Smoke CLI entrypoint
+        run: python -m agent_vision --help
+      - name: Smoke see command
+        run: python -m agent_vision see --help
+      - name: Smoke provider presets
+        run: python -m agent_vision providers
+      - name: Smoke dry-run setup in clean temp home
+        shell: bash
+        env:
+          AGENT_VISION_HOME: ${{ runner.temp }}/agent-vision-smoke-home
+        run: python -m agent_vision setup --provider free --api-key sk-test --dry-run

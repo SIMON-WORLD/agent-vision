@@ -1,0 +1,15 @@
+{
+  "name": "codex-deepseek-vision",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e .",
+  "forwardPorts": [
+    19100
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ]
+    }
+  }
+}
