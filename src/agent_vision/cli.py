@@ -782,6 +782,9 @@ def cmd_see(args: argparse.Namespace) -> int:
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if getattr(args, "latest", False) and args.images:
+        print("error: --latest cannot be combined with image paths/URLs", file=sys.stderr)
+        return 2
     prompt = args.question or TASK_PROMPTS.get(args.task or "describe", DEFAULT_DESCRIBE_PROMPT)
     if getattr(args, "latest", False):
         label = "[latest pasted image]"
@@ -1515,9 +1518,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     see = sub.add_parser("see", help="describe/analyze local images, image URLs, or the latest pasted image")
-    see_group = see.add_mutually_exclusive_group()
-    see_group.add_argument("images", nargs="*", help="local image paths or http(s) image URLs")
-    see_group.add_argument("--latest", action="store_true", help="recover and analyze the latest image pasted into Codex from session files")
+    see.add_argument("images", nargs="*", help="local image paths or http(s) image URLs")
+    see.add_argument("--latest", action="store_true", help="recover and analyze the latest image pasted into Codex from session files")
     see.add_argument("--task", choices=list(TASK_PROMPTS), default="describe", help="task preset: describe, ocr, ui, chart")
     see.add_argument("-q", "--question", default=None, help="question for the vision model (overrides --task)")
     see.add_argument("--model", default=None)

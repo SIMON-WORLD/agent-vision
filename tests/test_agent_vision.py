@@ -179,9 +179,10 @@ class CliTests(unittest.TestCase):
     def test_see_latest_and_images_mutually_exclusive(self):
         path = str(Path(__file__).resolve().parent / "sample.png")
         Path(path).write_bytes(png_bytes())
-        with self.assertRaises(SystemExit) as ctx:
-            vb.main(["see", path, "--latest"])
-        self.assertEqual(ctx.exception.code, 2)
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            code = vb.main(["see", path, "--latest"])
+        self.assertEqual(code, 2)
+        self.assertIn("--latest", err.getvalue())
 
     def test_see_latest_describes_pasted_image(self):
         captured = {}
