@@ -131,6 +131,15 @@ def cfg(name: str, default: str = "") -> str:
     return value if value not in (None, "") else default
 
 
+def reload_env() -> None:
+    """Reload .env into the process cache after writing config files."""
+    _DOTENV.clear()
+    _DOTENV.update(load_dotenv(ENV_FILE))
+    _ENV.clear()
+    _ENV.update(_DOTENV)
+    _ENV.update(os.environ)
+
+
 def load_custom_providers() -> dict[str, dict[str, str]]:
     """Load user-defined provider presets from providers.json."""
     result: dict[str, dict[str, str]] = {}
@@ -938,6 +947,7 @@ def cmd_setup_provider(args: argparse.Namespace) -> int:
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
     if providers_content is not None:
         CUSTOM_PROVIDERS_FILE.write_text(providers_content, encoding="utf-8")
+    reload_env()
 
     hint = SETUP_KEY_HINTS.get(values["id"], "")
     print("\nDone. Config written.")
@@ -1033,6 +1043,7 @@ def cmd_setup_full(args: argparse.Namespace, agent_id: str) -> int:
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
     if providers_content is not None:
         CUSTOM_PROVIDERS_FILE.write_text(providers_content, encoding="utf-8")
+    reload_env()
 
     if not upstream:
         print("error: cannot determine proxy upstream; pass --proxy-upstream", file=sys.stderr)
