@@ -3,8 +3,9 @@
 
 Two modes:
 
-  see    -- CLI: describe/analyze local images via an OpenAI-compatible
-            vision API. Defaults to Zhipu GLM-4V-Flash (free).
+  see    -- CLI: describe/analyze local images, image URLs, or the latest
+            image pasted into Codex via an OpenAI-compatible vision API.
+            Defaults to Zhipu GLM-4V-Flash (free).
 
   proxy  -- local HTTP proxy that rewrites image content to text before
             forwarding the request to a text-only upstream (DeepSeek etc.).
@@ -63,6 +64,25 @@ DEFAULT_DESCRIBE_PROMPT = (
     "layout, colors, error messages, and any data you can read. "
     "Do not guess. Reply in Chinese unless the user asks otherwise."
 )
+
+TASK_PROMPTS: dict[str, str] = {
+    "describe": DEFAULT_DESCRIBE_PROMPT,
+    "ocr": (
+        "Extract every visible text exactly as it appears, including error "
+        "codes, numbers, field labels, timestamps and file names. Keep line "
+        "order and formatting. Reply in Chinese unless the user asks otherwise."
+    ),
+    "ui": (
+        "Describe this UI or screenshot precisely: layout, controls, states, "
+        "visible text, colors, spacing and any visual problems or inconsistencies. "
+        "Do not guess. Reply in Chinese unless the user asks otherwise."
+    ),
+    "chart": (
+        "Read this chart, plot or table: title, axes, units, categories, key "
+        "values, trends and anomalies. Do not invent numbers. Reply in Chinese "
+        "unless the user asks otherwise."
+    ),
+}
 
 PROVIDERS: dict[str, dict[str, str]] = {
     "zhipu": {
@@ -395,6 +415,164 @@ def image_url_from_part(part: object) -> str | None:
     return None
 
 
+
+def load_url_image(url: str) -> tuple[str, bytes]:
+    """Download an image URL and return (mime, bytes)."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"image URL must use http:// or https://: {url}")
+    try:
+        response = urllib.request.urlopen(url, timeout=60)
+    except urllib.error.URLError as error:
+        raise ValueError(f"cannot download image URL: {error.reason}")
+    try:
+        length = response.headers.get("Content-Length")
+        if length:
+            try:
+                if int(length) > MAX_IMAGE_BYTES:
+                    raise ValueError(f"image too large: {int(length) / 1024 / 1024:.1f} MB")
+            except ValueError:
+                pass
+        data = bytearray()
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > MAX_IMAGE_BYTES:
+                raise ValueError(f"image too large: {len(data) / 1024 / 1024:.1f} MB")
+    finally:
+        response.close()
+    mime = response.headers.get_content_type() or guess_mime(url)
+    if not mime.startswith("image/"):
+        mime = guess_mime(url)
+    if not data:
+        raise ValueError(f"empty image from URL: {url}")
+    return mime, bytes(data)
+
+
+def describe_source(
+    source: str,
+    prompt: str,
+    *,
+    model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    use_cache: bool = True,
+) -> str:
+    """Describe a local image path or an http(s) image URL."""
+    if source.startswith(("http://", "https://")):
+        mime, data = load_url_image(source)
+        return describe_bytes(
+            data,
+            mime,
+            prompt,
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            use_cache=use_cache,
+        )
+    return describe_file(
+        source,
+        prompt,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        use_cache=use_cache,
+    )
+
+
+def _find_input_image(obj: object) -> tuple[str, bytes] | None:
+    """Find an input_image part with a data URL in a decoded JSON value."""
+    if isinstance(obj, dict):
+        if obj.get("type") == "input_image":
+            url = obj.get("image_url")
+            if isinstance(url, dict):
+                url = url.get("url")
+            match = DATA_URL_RE.match(url) if isinstance(url, str) else None
+            if match:
+                mime, b64 = match.group(1), match.group(2)
+                try:
+                    data = base64.b64decode(b64)
+                except Exception:
+                    data = b""
+                if data and len(data) <= MAX_IMAGE_BYTES:
+                    return mime, data
+        for value in obj.values():
+            found = _find_input_image(value)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for value in obj:
+            found = _find_input_image(value)
+            if found:
+                return found
+    return None
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _iter_reversed_lines(handle: object, chunk_size: int = 64 * 1024) -> str:
+    """Yield text lines from a binary file from the end, without loading it all."""
+    handle.seek(0, os.SEEK_END)
+    tail = b""
+    pos = handle.tell()
+    while pos > 0:
+        read_size = min(chunk_size, pos)
+        pos -= read_size
+        handle.seek(pos)
+        tail = handle.read(read_size) + tail
+        lines = tail.split(b"\n")
+        tail = lines[0]
+        for line in reversed(lines[1:]):
+            yield line.decode("utf-8", errors="replace")
+    if tail:
+        yield tail.decode("utf-8", errors="replace")
+
+
+def find_latest_pasted_image(
+    session_dir: Path | None = None,
+    max_files: int = 20,
+) -> tuple[str, bytes]:
+    """Return (mime, bytes) of the most recent image pasted into Codex.
+
+    Codex stores pasted images as ``input_image`` parts with base64 data URLs
+    in ``~/.codex/sessions/**/*.jsonl`` (or ``$CODEX_HOME/sessions``). Only the
+    newest ``max_files`` session files are scanned; each file is read backwards
+    so the first hit is the latest pasted image.
+    """
+    codex_home = os.environ.get("CODEX_HOME")
+    root = Path(session_dir) if session_dir is not None else Path(codex_home or Path.home() / ".codex") / "sessions"
+    if not root.is_dir():
+        raise ValueError(f"Codex sessions directory not found: {root}")
+    try:
+        candidates = list(root.rglob("*.jsonl"))
+    except OSError:
+        candidates = []
+    files = sorted(candidates, key=_safe_mtime, reverse=True)[: max_files]
+    for file in files:
+        try:
+            with file.open("rb") as handle:
+                for line in _iter_reversed_lines(handle):
+                    if "input_image" not in line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except ValueError:
+                        continue
+                    found = _find_input_image(obj)
+                    if found:
+                        return found
+        except OSError:
+            continue
+    raise ValueError(f"no pasted image found in recent Codex sessions under {root}")
+
+
 def _focus_text(content: list[object]) -> str:
     parts = []
     for part in content:
@@ -604,12 +782,43 @@ def cmd_see(args: argparse.Namespace) -> int:
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if getattr(args, "latest", False) and args.images:
+        print("error: --latest cannot be combined with image paths/URLs", file=sys.stderr)
+        return 2
+    prompt = args.question or TASK_PROMPTS.get(args.task or "describe", DEFAULT_DESCRIBE_PROMPT)
+    if getattr(args, "latest", False):
+        label = "[latest pasted image]"
+        try:
+            mime, data = find_latest_pasted_image()
+        except (OSError, ValueError) as error:
+            print(f"failed {label}: {error}", file=sys.stderr)
+            return 1
+        try:
+            text = describe_bytes(
+                data,
+                mime,
+                prompt,
+                model=model,
+                api_key=args.api_key,
+                base_url=base_url,
+                use_cache=not args.no_cache,
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"failed {label}: {error}", file=sys.stderr)
+            return 1
+        print(f"===== {label} =====")
+        print((text or "").strip())
+        print()
+        return 0
+    if not args.images:
+        print("error: specify image paths/URLs or use --latest", file=sys.stderr)
+        return 2
     for index, image in enumerate(args.images, start=1):
         label = image if len(args.images) == 1 else f"[{index}/{len(args.images)}] {image}"
         try:
-            text = describe_file(
+            text = describe_source(
                 image,
-                args.question,
+                prompt,
                 model=model,
                 api_key=args.api_key,
                 base_url=base_url,
@@ -1308,9 +1517,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent-vision", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    see = sub.add_parser("see", help="describe/analyze local images")
-    see.add_argument("images", nargs="+", help="image file paths")
-    see.add_argument("-q", "--question", default=DEFAULT_DESCRIBE_PROMPT, help="question for the vision model")
+    see = sub.add_parser("see", help="describe/analyze local images, image URLs, or the latest pasted image")
+    see.add_argument("images", nargs="*", help="local image paths or http(s) image URLs")
+    see.add_argument("--latest", action="store_true", help="recover and analyze the latest image pasted into Codex from session files")
+    see.add_argument("--task", choices=list(TASK_PROMPTS), default="describe", help="task preset: describe, ocr, ui, chart")
+    see.add_argument("-q", "--question", default=None, help="question for the vision model (overrides --task)")
     see.add_argument("--model", default=None)
     see.add_argument("--base-url", default=None)
     see.add_argument("--api-key", default=None)

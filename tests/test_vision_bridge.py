@@ -7,9 +7,9 @@ from unittest import mock
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import vision_bridge as vb
+import agent_vision.cli as vb
 
 
 def png_bytes() -> bytes:
@@ -239,6 +239,13 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("zhipu", out.getvalue())
         self.assertIn("dashscope", out.getvalue())
+
+
+class CompatibilityShimTests(unittest.TestCase):
+    def test_vision_bridge_reexports_cli(self):
+        import vision_bridge
+        self.assertIs(vision_bridge.main, vb.main)
+        self.assertIs(vision_bridge.describe_bytes, vb.describe_bytes)
 
 
 if __name__ == "__main__":

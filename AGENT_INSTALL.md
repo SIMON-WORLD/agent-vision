@@ -32,7 +32,11 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    ```bash
    agent-vision status
    agent-vision see <image-path> -q "What is in this image?"
+   agent-vision see https://example.com/image.png --task ocr
+   agent-vision see --latest
    ```
+
+   For Codex, also ask the user to paste an image or ask the agent to open a local image with the built-in `view_image`; both go through the local proxy and should return a text description instead of a modality error.
 
 6. If the user later asks to roll back an auto-patched agent:
 
