@@ -65,9 +65,16 @@ Paste this into your AI agent:
 Deploy agent-vision from https://github.com/SIMON-WORLD/codex-deepseek-vision per AGENT_INSTALL.md. Use the free Zhipu provider. Vision API key: <KEY>. Tell me when I need to restart Codex.
 ```
 
-### One-click setup (recommended)
+### One-line install (recommended)
 
-No terminal skills are required. Install Python 3.9+, clone the repository, then run:
+Install Python 3.9+, then run:
+
+```bash
+pip install agent-vision
+agent-vision setup
+```
+
+If PyPI is unreachable, install from the repository instead:
 
 ```bash
 git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git

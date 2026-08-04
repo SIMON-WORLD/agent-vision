@@ -65,9 +65,16 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 帮我从 https://github.com/SIMON-WORLD/codex-deepseek-vision 部署 agent-vision，按 AGENT_INSTALL.zh-CN.md 执行，用免费智谱，视觉 API Key 是 <KEY>，完成后提醒我重启 Codex。
 ```
 
-### 一键配置（推荐）
+### 一行安装（推荐）
 
-不需要懂终端。安装 Python 3.9+，克隆仓库后运行：
+安装 Python 3.9+ 后运行：
+
+```bash
+pip install agent-vision
+agent-vision setup
+```
+
+如果 PyPI 不可达，再从仓库安装：
 
 ```bash
 git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git

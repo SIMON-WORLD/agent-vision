@@ -14,12 +14,17 @@
 
 ## Agent 执行清单
 
-1. 找到或克隆项目仓库。除非下面步骤明确要求修改 Agent 配置，否则所有写入都留在项目目录内。
-2. 安装包：
+1. 从 PyPI 安装（最简单）；如果 PyPI 不可达，再克隆仓库从源码安装：
 
    ```bash
+   pip install agent-vision
+   # 或
+   git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
+   cd codex-deepseek-vision
    pip install .
    ```
+
+   除非下面步骤明确要求修改 Agent 配置，否则所有写入都留在项目目录内。
 
 3. 询问用户选择视觉服务商：`zhipu`（免费）、`dashscope`、`openai`、`gemini`、`groq`、`siliconflow`、`openrouter`，或自定义 OpenAI 兼容接口。请用户提供对应的 API Key，或让用户自己粘贴到用户配置目录的 `.env`（`~/.agent-vision/.env`，Windows 为 `%USERPROFILE%\.agent-vision\.env`）。
 4. 运行引导式配置：

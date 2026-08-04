@@ -14,12 +14,17 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 
 ## Checklist for the agent
 
-1. Locate the repository or clone it locally. Keep all writes inside the project unless a step below explicitly requires a backed-up agent config change.
-2. Install the package:
+1. Install the package from PyPI (simplest), or clone the repository and install from source when PyPI is unreachable:
 
    ```bash
+   pip install agent-vision
+   # or
+   git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
+   cd codex-deepseek-vision
    pip install .
    ```
+
+   Keep all writes inside the project unless a step below explicitly requires a backed-up agent config change.
 
 3. Ask the user which vision provider they want: `zhipu` (free), `dashscope`, `openai`, `gemini`, `groq`, `siliconflow`, `openrouter`, or a custom OpenAI-compatible endpoint. Ask the user to provide the matching API key, or let them paste it into the user config directory's `.env` themselves (`~/.agent-vision/.env`, or `%USERPROFILE%\.agent-vision\.env` on Windows).
 4. Run the guided setup:
