@@ -1,7 +1,13 @@
 .env
+providers.json
+runtime.json
+*.state.json
+*.log
 __pycache__/
 *.pyc
 *.egg-info/
 .agent-vision-runtime.json
 .agent-vision-runtime.log
+dist/
+build/
 tests/sample.png

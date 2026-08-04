@@ -664,4 +664,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    print(
+        "DEPRECATED: vision_bridge.py is kept for compatibility; use `agent-vision` instead.",
+        file=sys.stderr,
+    )
     sys.exit(main())

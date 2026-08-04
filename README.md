@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Release](https://img.shields.io/badge/release-v1.0.0-brightgreen)](https://github.com/SIMON-WORLD/agent-vision/releases)
+[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
 **Give any AI agent vision capability.** If your agent's model is text-only (DeepSeek V4, GLM, MiMo, or any non-vision model), agent-vision adds image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; your main model keeps reasoning. No Ollama, no GPU, no model swap.
 
@@ -18,8 +18,8 @@ Text-only agents cannot see pasted screenshots, local images, charts, or error d
 
 ## Demo
 
-![Order success](examples/sample-order-success.png)
-![Error dialog](examples/sample-error-dialog.png)
+![Order success](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
+![Error dialog](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
 
 ```bash
 agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
@@ -56,7 +56,7 @@ flowchart LR
 
 | Agent | Integration | Status |
 |---|---|---|
-| Codex | Auto-patches `~/.codex/config.toml`, one-command setup, backup and rollback | Fully automatic |
+| Codex | Safe auto-patch: rewrites only the active provider's `base_url` to the local proxy; keeps `wire_api` and keys; backup and rollback | Fully automatic |
 | OpenCode | Auto-patches `opencode.json` with an OpenAI-compatible provider | Fully automatic |
 | Claude Code | Detected and guided; Claude speaks the Anthropic protocol, so a protocol-compatible gateway is required | Manual steps provided |
 | Cursor | Detected and guided; Cursor exposes the base URL override only through Settings -> Models | Manual steps provided |
@@ -89,13 +89,15 @@ pip install .
 agent-vision setup
 ```
 
-The wizard detects your agent, lets you pick Free / Quality / Custom vision, writes the config with a backup, starts the local runtime, verifies the connection, and prints the final health status.
+The wizard detects your agent, lets you pick Free / Quality / Custom vision, writes the config with a backup, starts the local runtime, verifies the connection, and prints the final health status. For Codex it only rewrites the active provider's `base_url`; `model_provider`, `model`, `wire_api` and API keys are left untouched.
 
 You can also paste this into your agent and let it do the work:
 
 ```text
 Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use the free Zhipu provider unless I choose another one.
 ```
+
+All user configuration lives in one directory: `~/.agent-vision/` on Linux/macOS, `%USERPROFILE%\.agent-vision\` on Windows. Override it with `AGENT_VISION_HOME` if you prefer another location. The setup wizard creates and fills this directory automatically.
 
 ### Runtime management
 
@@ -117,7 +119,7 @@ Every auto-patch creates a timestamped backup before modifying anything, and `ro
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the vision API key. Zhipu keys use the `{API Key ID}.{secret}` format. Do not add quotes; the loader strips surrounding quotes and whitespace.
+`agent-vision setup` writes and manages `.env` inside the user config directory. For manual configuration, copy `.env.example` to `~/.agent-vision/.env` (Windows: `%USERPROFILE%\.agent-vision\.env`) and fill in the vision API key. Zhipu keys use the `{API Key ID}.{secret}` format. Do not add quotes; the loader strips surrounding quotes and whitespace.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -127,7 +129,7 @@ Copy `.env.example` to `.env` and fill in the vision API key. Zhipu keys use the
 | `VISION_PROXY_UPSTREAM` | - | Optional: URL the local proxy forwards to |
 | `VISION_PROXY_LISTEN` | `127.0.0.1:19100` | Optional: local proxy listen address |
 
-For a custom provider, ask your agent to add one to `providers.json`; no code changes are needed. Entries there override built-in presets with the same id.
+For a custom provider, ask your agent to add one to `providers.json` in the user config directory; no code changes are needed. Entries there override built-in presets with the same id.
 
 ## CLI Reference
 

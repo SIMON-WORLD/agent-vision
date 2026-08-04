@@ -1,4 +1,11 @@
-"""Codex adapter: detect, backup, patch, apply and roll back config.toml."""
+"""Codex adapter: detect, backup, patch, apply and roll back config.toml.
+
+The patch is intentionally minimal: it rewrites only the ``base_url`` of the
+active model provider to the local agent-vision proxy. It never changes
+``model_provider``, ``model``, ``wire_api``, auth keys or any other setting,
+because modern Codex relies on ``wire_api = "responses"`` and an injected
+provider table would break startup.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +17,7 @@ from pathlib import Path
 from ..version import VERSION
 from .base import AgentAdapter
 
-PROVIDER_ID = "agent-vision"
-PROVIDER_NAME = "Agent Vision Bridge"
 PROXY_BASE_URL = "http://127.0.0.1:19100/v1"
-WIRE_API = "chat"
 
 _KEY_RE = re.compile(r'^\s*([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"\s*$')
 _SECTION_RE = re.compile(r"^\[(.+)]\s*$")
@@ -70,10 +74,12 @@ class CodexAdapter(AgentAdapter):
         text = self.config_path.read_text(encoding="utf-8")
         top = self._top_level(text)
         provider = top.get("model_provider", "")
+        table = self._provider_table(text, provider) if provider else {}
         return {
             "model": top.get("model", ""),
             "model_provider": provider,
-            "base_url": self._provider_table(text, provider).get("base_url", "") if provider else "",
+            "base_url": table.get("base_url", ""),
+            "wire_api": table.get("wire_api", ""),
         }
 
     def detect(self) -> dict[str, object]:
@@ -89,7 +95,9 @@ class CodexAdapter(AgentAdapter):
             "model": model.get("model", ""),
             "model_provider": model.get("model_provider", ""),
             "base_url": model.get("base_url", ""),
-            "patched": bool(state),
+            "wire_api": model.get("wire_api", ""),
+            "patched": model.get("base_url") == PROXY_BASE_URL,
+            "patch_mode": "base-url",
             "backup_path": str(state.get("backup_path", "")) if state else "",
             "upstream": str(state.get("upstream", "")) if state else "",
         }
@@ -114,72 +122,40 @@ class CodexAdapter(AgentAdapter):
         cls,
         text: str,
         *,
-        provider_id: str = PROVIDER_ID,
         base_url: str = PROXY_BASE_URL,
-        wire_api: str = WIRE_API,
-        name: str = PROVIDER_NAME,
     ) -> str:
-        """Return config.toml content with the agent-vision provider wired in."""
+        """Return config.toml with only the active provider's base_url replaced."""
+        top = cls._top_level(text)
+        provider = top.get("model_provider", "")
+        if not provider:
+            raise ValueError("cannot find model_provider in Codex config")
+        target = f"model_providers.{provider}"
         lines = text.splitlines()
         out: list[str] = []
-        replaced_top = False
-        for line in lines:
-            stripped = line.strip()
-            is_top_key = not stripped.startswith("[") and _KEY_RE.match(line)
-            key = line.split("=", 1)[0].strip() if is_top_key else None
-            if key == "model_provider":
-                out.append(f'model_provider = "{provider_id}"')
-                replaced_top = True
-            else:
-                out.append(line)
-        if not replaced_top:
-            insert_at = len(out)
-            for index, line in enumerate(out):
-                stripped = line.strip()
-                if _KEY_RE.match(stripped) and line.split("=", 1)[0].strip() == "model":
-                    insert_at = index + 1
-            out.insert(insert_at, f'model_provider = "{provider_id}"')
-
-        target = f"model_providers.{provider_id}"
-        block = [
-            f"[{target}]",
-            f'name = "{name}"',
-            f'base_url = "{base_url}"',
-            f'wire_api = "{wire_api}"',
-        ]
-        result: list[str] = []
         in_target = False
         replaced = False
-        index = 0
-        while index < len(out):
-            line = out[index]
+        for line in lines:
             stripped = line.strip()
             section = _SECTION_RE.match(stripped)
             if section:
                 in_target = section.group(1).strip() == target
-            if in_target and not replaced:
-                index += 1
-                while index < len(out) and not out[index].strip().startswith("["):
-                    index += 1
-                result.extend(block)
-                replaced = True
-                continue
-            result.append(line)
-            index += 1
+            if in_target:
+                match = _KEY_RE.match(line)
+                if match and match.group(1) == "base_url":
+                    out.append(f'base_url = "{base_url}"')
+                    replaced = True
+                    continue
+            out.append(line)
         if not replaced:
-            insert_at = len(result)
-            for index, line in enumerate(result):
-                if line.strip().startswith("["):
-                    insert_at = index
-                    break
-            result[insert_at:insert_at] = block
-        return "\n".join(result).rstrip() + "\n"
+            raise ValueError(f"cannot locate base_url under [{target}]")
+        return "\n".join(out).rstrip() + "\n"
 
     def plan(self, upstream: str | None = None) -> dict[str, object]:
         detection = self.detect()
         if not detection["config_exists"]:
             raise FileNotFoundError(f"Codex config not found: {self.config_path}")
         resolved_upstream = self._detected_upstream(upstream)
+        provider = str(detection["model_provider"])
         backup_path = self.unique_backup_path(self.config_path, "agent-vision")
         files = [
             {
@@ -187,9 +163,8 @@ class CodexAdapter(AgentAdapter):
                 "action": "modify",
                 "backup": str(backup_path),
                 "summary": (
-                    f'set model_provider = "{PROVIDER_ID}", add '
-                    f'[model_providers.{PROVIDER_ID}] base_url = "{PROXY_BASE_URL}", '
-                    f'wire_api = "{WIRE_API}"'
+                    f'rewrite base_url under [model_providers.{provider}] to {PROXY_BASE_URL}; '
+                    "keep model_provider, model, wire_api and auth untouched"
                 ),
             },
             {
@@ -221,8 +196,11 @@ class CodexAdapter(AgentAdapter):
                 "config_path": str(self.config_path),
                 "backup_path": str(backup_path),
                 "model": str(detection["model"]),
-                "model_provider": PROVIDER_ID,
+                "model_provider": str(detection["model_provider"]),
+                "wire_api": str(detection["wire_api"]),
+                "base_url": PROXY_BASE_URL,
                 "upstream": resolved_upstream,
+                "patch_mode": "base-url",
                 "patched_at": self.timestamp(),
             },
         )
@@ -233,6 +211,7 @@ class CodexAdapter(AgentAdapter):
             "state_path": str(self.state_path),
             "upstream": resolved_upstream,
             "model": str(detection["model"]),
+            "model_provider": str(detection["model_provider"]),
         }
 
     def rollback(self) -> dict[str, object]:

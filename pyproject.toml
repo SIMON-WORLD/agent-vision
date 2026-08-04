@@ -1,26 +1,35 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-vision"
-version = "1.0.0"
+version = "1.0.1"
 description = "Give any AI agent vision capability: image to text for text-only agents."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Simon" }]
 keywords = ["vision", "agent", "codex", "claude", "cursor", "opencode", "ocr", "proxy", "llm"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 [project.scripts]
 agent-vision = "agent_vision.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SIMON-WORLD/agent-vision"
+Repository = "https://github.com/SIMON-WORLD/agent-vision"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

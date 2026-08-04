@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Release](https://img.shields.io/badge/release-v1.0.0-brightgreen)](https://github.com/SIMON-WORLD/agent-vision/releases)
+[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
 **给任何 AI Agent 加上看图能力。** 当你的 Agent 主模型是纯文本模型（DeepSeek V4、GLM、MiMo 等）时，agent-vision 通过一个 OpenAI 兼容的免费视觉 API 把图片转成文字，主模型继续负责推理。不需要 Ollama、不需要 GPU、不需要换模型。
 
@@ -18,8 +18,8 @@
 
 ## Demo
 
-![订单成功](examples/sample-order-success.png)
-![报错弹窗](examples/sample-error-dialog.png)
+![订单成功](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
+![报错弹窗](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
 
 ```bash
 agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
@@ -56,7 +56,7 @@ flowchart LR
 
 | Agent | 接入方式 | 状态 |
 |---|---|---|
-| Codex | 自动修改 `~/.codex/config.toml`，一键配置、备份、回滚 | 全自动 |
+| Codex | 安全自动修改：只把当前活动 provider 的 `base_url` 改为本地代理，不动 `wire_api` 和 Key；带备份和回滚 | 全自动 |
 | OpenCode | 自动在 `opencode.json` 里添加 OpenAI 兼容 provider | 全自动 |
 | Claude Code | 检测并给出指引；Claude 使用 Anthropic 协议，需要协议兼容网关 | 提供手动步骤 |
 | Cursor | 检测并给出指引；Cursor 只在 Settings -> Models 里提供 Base URL 覆盖开关 | 提供手动步骤 |
@@ -89,13 +89,15 @@ pip install .
 agent-vision setup
 ```
 
-向导会自动检测你的 Agent，让你选择 Free / Quality / Custom 视觉服务，带备份写入配置，启动本地运行时，验证连接，最后输出健康状态。
+向导会自动检测你的 Agent，让你选择 Free / Quality / Custom 视觉服务，带备份写入配置，启动本地运行时，验证连接，最后输出健康状态。对 Codex 只改写当前活动 provider 的 `base_url`，`model_provider`、`model`、`wire_api` 和 API Key 都不动。
 
 也可以把下面这句话发给你的 AI Agent，让它替你完成：
 
 ```text
 帮我安装并配置 agent-vision。请阅读 AGENT_INSTALL.zh-CN.md 并从头到尾执行。默认使用智谱免费服务，除非我指定其他服务商。
 ```
+
+所有用户配置统一放在一个目录：Linux/macOS 为 `~/.agent-vision/`，Windows 为 `%USERPROFILE%\.agent-vision\`。也可以用 `AGENT_VISION_HOME` 环境变量覆盖。setup 向导会自动创建并填写这个目录。
 
 ### 运行时管理
 
@@ -117,7 +119,7 @@ agent-vision rollback opencode
 
 ## 配置
 
-把 `.env.example` 复制为 `.env` 并填写视觉 API Key。智谱 Key 格式为 `{API Key ID}.{secret}`，不需要加引号；脚本会自动去掉值两侧的引号和空格。
+`agent-vision setup` 会在用户配置目录里自动写入和管理 `.env`。手动配置时，把 `.env.example` 复制为 `~/.agent-vision/.env`（Windows：`%USERPROFILE%\.agent-vision\.env`）并填写视觉 API Key。智谱 Key 格式为 `{API Key ID}.{secret}`，不需要加引号；脚本会自动去掉值两侧的引号和空格。
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
@@ -127,7 +129,7 @@ agent-vision rollback opencode
 | `VISION_PROXY_UPSTREAM` | - | 可选：本地代理转发的上游地址 |
 | `VISION_PROXY_LISTEN` | `127.0.0.1:19100` | 可选：本地代理监听地址 |
 
-需要自定义服务商时，让 Agent 在 `providers.json` 里添加即可，不需要改代码。同 id 的条目会覆盖内置预设。
+需要自定义服务商时，让 Agent 在用户配置目录的 `providers.json` 里添加即可，不需要改代码。同 id 的条目会覆盖内置预设。
 
 ## CLI 参考
 

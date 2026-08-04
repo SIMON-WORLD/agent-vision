@@ -19,14 +19,14 @@
    pip install .
    ```
 
-3. 询问用户选择视觉服务商：`zhipu`（免费）、`dashscope`、`openai`、`gemini`、`groq`、`siliconflow`、`openrouter`，或自定义 OpenAI 兼容接口。请用户提供对应的 API Key，或让用户自己粘贴到 `.env`。
+3. 询问用户选择视觉服务商：`zhipu`（免费）、`dashscope`、`openai`、`gemini`、`groq`、`siliconflow`、`openrouter`，或自定义 OpenAI 兼容接口。请用户提供对应的 API Key，或让用户自己粘贴到用户配置目录的 `.env`（`~/.agent-vision/.env`，Windows 为 `%USERPROFILE%\.agent-vision\.env`）。
 4. 运行引导式配置：
 
    ```bash
    agent-vision setup
    ```
 
-   向导会自动检测已安装的 Agent，写入 `.env`（自定义服务商还会写 `providers.json`），启动本地运行时并验证视觉 API。对 Codex 和 OpenCode，它还会先备份再自动修改 Agent 配置。
+   向导会自动检测已安装的 Agent，在用户配置目录写入 `.env`（自定义服务商还会写 `providers.json`），启动本地运行时并验证视觉 API。对 Codex 会先备份，且只改写当前活动 provider 的 `base_url`（绝不改 `wire_api`、模型或 Key）；对 OpenCode 会自动添加 OpenAI 兼容 provider。
 5. 明确验证链路：
 
    ```bash
@@ -43,7 +43,7 @@
    ```
 
 7. 对 Claude Code 和 Cursor，执行 `agent-vision setup --agent claude --dry-run` 与 `agent-vision setup --agent cursor --dry-run` 会打印官方手动步骤。不要为这两个 Agent 编造配置键。
-8. 绝不提交或上传 `.env`。最后向用户汇报：选择的服务商、验证结果、备份了哪些文件。
+8. 绝不提交或上传 `.env`。API Key 只放在用户配置目录，不要放进仓库。最后向用户汇报：选择的服务商、验证结果、备份了哪些文件。
 
 ## Agent 守则
 

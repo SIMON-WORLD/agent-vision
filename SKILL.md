@@ -14,7 +14,7 @@ description: 当主模型不支持图像输入，而用户要求查看、读取�
 ## 工作流程
 
 1. 确认图片路径真实存在，支持 png / jpg / jpeg / webp / gif / bmp。
-2. 若项目已配置 `.env`，直接运行：
+2. 若用户配置目录 `~/.agent-vision/`（Windows 为 `%USERPROFILE%\.agent-vision\`）已配置 `.env`，直接运行：
 
    ```bash
    agent-vision see <图片路径> -q "<用户的具体问题>"

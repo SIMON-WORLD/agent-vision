@@ -38,6 +38,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .adapters import ADAPTERS, AgentAdapter, CodexAdapter, get_adapter
+from . import config_home
 from .runtime import DEFAULT_LISTEN, RuntimeManager
 from .version import VERSION
 
@@ -49,8 +50,7 @@ except (AttributeError, ValueError):
     pass
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ENV_FILE = REPO_ROOT / ".env"
+ENV_FILE = config_home.env_file()
 DEFAULT_VISION_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 DEFAULT_VISION_MODEL = "glm-4v-flash"
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -102,7 +102,7 @@ PROVIDERS: dict[str, dict[str, str]] = {
     },
 }
 
-CUSTOM_PROVIDERS_FILE = REPO_ROOT / "providers.json"
+CUSTOM_PROVIDERS_FILE = config_home.providers_file()
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -933,6 +933,8 @@ def cmd_setup_provider(args: argparse.Namespace) -> int:
         print("\nDry run: no files were modified.")
         return 0
 
+    ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CUSTOM_PROVIDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
     if providers_content is not None:
         CUSTOM_PROVIDERS_FILE.write_text(providers_content, encoding="utf-8")
@@ -1026,6 +1028,8 @@ def cmd_setup_full(args: argparse.Namespace, agent_id: str) -> int:
             print("cancelled")
             return 1
 
+    ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CUSTOM_PROVIDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
     if providers_content is not None:
         CUSTOM_PROVIDERS_FILE.write_text(providers_content, encoding="utf-8")
@@ -1348,6 +1352,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    try:
+        config_home.initialize()
+    except OSError as error:
+        print(f"warning: cannot initialize agent-vision config home: {error}", file=sys.stderr)
     if args.command == "proxy":
         return args.handler(args.listen, args.upstream, args.max_images, args.provider)
     return args.handler(args)

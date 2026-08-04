@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import config_home
 from .version import VERSION
 
 DEFAULT_LISTEN = "127.0.0.1:19100"
@@ -24,11 +25,23 @@ class RuntimeManager:
         self,
         state_file: Path | None = None,
         repo_root: Path | None = None,
+        log_file: Path | None = None,
         default_listen: str | None = None,
     ):
-        self.repo_root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parent.parent.parent
-        self.state_file = Path(state_file) if state_file is not None else self.repo_root / ".agent-vision-runtime.json"
-        self.log_file = self.repo_root / ".agent-vision-runtime.log"
+        if repo_root is not None:
+            self.repo_root = Path(repo_root)
+            if state_file is None:
+                state_file = self.repo_root / ".agent-vision-runtime.json"
+            if log_file is None:
+                log_file = self.repo_root / ".agent-vision-runtime.log"
+        else:
+            self.repo_root = config_home.agent_vision_home()
+            if state_file is None:
+                state_file = config_home.runtime_state_file()
+            if log_file is None:
+                log_file = config_home.runtime_log_file()
+        self.state_file = Path(state_file)
+        self.log_file = Path(log_file)
         self.default_listen = default_listen or DEFAULT_LISTEN
 
     def state(self) -> dict[str, object]:
@@ -41,6 +54,7 @@ class RuntimeManager:
             return {}
 
     def _write_state(self, data: dict[str, object]) -> None:
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
         self.state_file.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     @staticmethod
@@ -144,6 +158,7 @@ class RuntimeManager:
         flags = 0
         if os.name == "nt":
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
         log_handle = open(self.log_file, "ab")
         try:
             proc = subprocess.Popen(

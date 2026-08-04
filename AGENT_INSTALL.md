@@ -19,14 +19,14 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    pip install .
    ```
 
-3. Ask the user which vision provider they want: `zhipu` (free), `dashscope`, `openai`, `gemini`, `groq`, `siliconflow`, `openrouter`, or a custom OpenAI-compatible endpoint. Ask the user to provide the matching API key, or let them paste it into `.env` themselves.
+3. Ask the user which vision provider they want: `zhipu` (free), `dashscope`, `openai`, `gemini`, `groq`, `siliconflow`, `openrouter`, or a custom OpenAI-compatible endpoint. Ask the user to provide the matching API key, or let them paste it into the user config directory's `.env` themselves (`~/.agent-vision/.env`, or `%USERPROFILE%\.agent-vision\.env` on Windows).
 4. Run the guided setup:
 
    ```bash
    agent-vision setup
    ```
 
-   The wizard detects the installed agent, writes `.env` (and `providers.json` for custom providers), starts the local runtime, and verifies the vision API. For Codex and OpenCode it also backs up and patches the agent config automatically.
+   The wizard detects the installed agent, writes `.env` (and `providers.json` for custom providers) into the user config directory, starts the local runtime, and verifies the vision API. For Codex it backs up and only rewrites the active provider's `base_url` (never `wire_api`, model or keys); for OpenCode it adds the OpenAI-compatible provider automatically.
 5. Verify the pipeline explicitly:
 
    ```bash
@@ -43,7 +43,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    ```
 
 7. For Claude Code and Cursor, `agent-vision setup --agent claude --dry-run` and `agent-vision setup --agent cursor --dry-run` print the official manual steps. Do not invent config keys for these agents.
-8. Never commit or upload `.env`. Report the chosen provider, the verification result, and any files that were backed up.
+8. Never commit or upload `.env`. Keep API keys in the user config directory, not in the repository. Report the chosen provider, the verification result, and any files that were backed up.
 
 ## Rules for the agent
 
