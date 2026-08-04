@@ -4,7 +4,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
-**Give Codex's DeepSeek V4 Flash image capability.** DeepSeek V4 Flash now speaks the Responses protocol and runs inside Codex/ChatGPT, but the model itself is text-only. agent-vision converts pasted images into text locally through a free OpenAI-compatible vision API before DeepSeek reasons. No Ollama, no GPU, no model swap.
+**Codex vision bridge for DeepSeek V4 Flash and other text-only models.** DeepSeek V4 Flash now speaks the Responses protocol and runs inside Codex/ChatGPT, but the model itself is text-only and cannot see images. agent-vision is a free local vision proxy: pasted images and `view_image` calls are converted into text through an OpenAI-compatible vision API (free GLM-4V-Flash by default) before DeepSeek reasons. No Ollama, no GPU, no model swap.
 
 **English** | [中文](README.zh-CN.md)
 
@@ -13,7 +13,7 @@
 Text-only agents cannot see pasted screenshots, local images, charts, or error dialogs. Replacing the model usually means paying more or changing your whole workflow. agent-vision sits between the agent and its model provider and does the conversion automatically:
 
 - Paste an image in your agent, and the local proxy rewrites it into text before the request reaches the text-only model.
-- Ask the agent to inspect a file, and the `see` command sends it to a vision API and returns a factual description.
+- Ask the agent to inspect a local image, an image URL, or the latest image you pasted (`see --latest`), and it returns a factual description.
 - Keep your existing model, key, and workflow. Everything is local, reversible, and free by default.
 
 ## Architecture
@@ -33,7 +33,7 @@ flowchart LR
 
 | Agent | Integration | Status |
 |---|---|---|
-| Codex | Safe auto-patch: rewrites only the active provider's `base_url` to the local proxy, keeps `wire_api` and keys, and declares image input for the active model in a local model catalog (e.g. cc-switch) when present so pasted images are allowed; backup and rollback | Fully automatic |
+| Codex | Safe auto-patch: rewrites only the active provider's `base_url` to the local proxy, keeps `wire_api` and keys, and declares image input for the active model in a local model catalog (e.g. cc-switch) when present so pasted images and `view_image` are allowed; backup and rollback; `see --latest` recovers the last pasted image as a fallback | Fully automatic |
 | OpenCode | Auto-patches `opencode.json` with an OpenAI-compatible provider | Fully automatic |
 | Claude Code | Detected and guided; Claude speaks the Anthropic protocol, so a protocol-compatible gateway is required | Manual steps provided |
 | Cursor | Detected and guided; Cursor exposes the base URL override only through Settings -> Models | Manual steps provided |
@@ -121,8 +121,8 @@ For a custom provider, ask your agent to add one to `providers.json` in the user
 ## CLI Reference
 
 ```bash
-# Analyze images on demand
-agent-vision see <image>... [-q "question"] [--provider ID] [--no-cache]
+# Analyze images on demand (local file, image URL, or latest pasted image)
+agent-vision see <image-or-url>... [-q "question"] [--task describe|ocr|ui|chart] [--latest] [--provider ID] [--no-cache]
 
 # Run the local image-strip proxy in the foreground
 agent-vision proxy --listen 127.0.0.1:19100 --upstream <origin>
@@ -154,6 +154,7 @@ python -m unittest discover -s tests -v
 - **Do I need a GPU or Ollama?** No. Vision is handled by a remote OpenAI-compatible API; the default Zhipu `glm-4v-flash` is free.
 - **Is my agent key exposed?** No. The proxy passes the original Authorization header through, so your main model key stays in the agent's existing config.
 - **Why does Codex still refuse pasted images ("model does not support image input")?** Codex decides whether the UI accepts pasted images from its model catalog. When you load models from a local catalog (e.g. cc-switch's `model_catalog_json`), `setup` now also declares image input for the active text-only model (with a timestamped backup; `rollback codex` restores it). If you switch models with cc-switch afterwards, that file may be regenerated — rerun `agent-vision setup` to re-apply.
+- **Can the agent call Codex's built-in `view_image`?** Yes. `view_image` sends the local image in a later request, and the same proxy converts it to text before the text-only model sees it. If your client refuses pasted images entirely, run `agent-vision see --latest` to recover the last image pasted into Codex from session files and analyze it directly.
 - **Can I use a paid provider?** Yes. Choose Quality or Custom in setup, or edit `.env` / `providers.json`.
 - **What happens if the vision API fails?** Proxy mode fails open and forwards the original request unchanged, so normal chat is not blocked.
 - **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.

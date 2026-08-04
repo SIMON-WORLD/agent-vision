@@ -1,6 +1,8 @@
 import base64
 import io
 import json
+import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -168,11 +170,148 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("描述结果", out.getvalue())
 
+    def test_see_requires_source(self):
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            code = vb.main(["see"])
+        self.assertEqual(code, 2)
+        self.assertIn("specify image paths/URLs or use --latest", err.getvalue())
+
+    def test_see_latest_describes_pasted_image(self):
+        captured = {}
+
+        def fake_describe_bytes(data, mime, prompt, **kwargs):
+            captured["data"] = data
+            captured["mime"] = mime
+            captured["prompt"] = prompt
+            return "猫的图片"
+
+        with mock.patch.object(vb, "find_latest_pasted_image", return_value=("image/png", png_bytes())):
+            with mock.patch.object(vb, "describe_bytes", side_effect=fake_describe_bytes):
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                    code = vb.main(["see", "--latest", "-q", "什么"])
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["data"], png_bytes())
+        self.assertEqual(captured["prompt"], "什么")
+        self.assertIn("猫的图片", out.getvalue())
+
+    def test_see_task_preset_uses_ocr_prompt(self):
+        path = str(Path(__file__).resolve().parent / "sample.png")
+        Path(path).write_bytes(png_bytes())
+        captured = {}
+
+        def fake_describe_file(image, prompt, **kwargs):
+            captured["prompt"] = prompt
+            return "ok"
+
+        with mock.patch.object(vb, "describe_file", side_effect=fake_describe_file):
+            with mock.patch("sys.stdout", new_callable=io.StringIO):
+                code = vb.main(["see", path, "--task", "ocr"])
+        self.assertEqual(code, 0)
+        self.assertIn("Extract every visible text", captured["prompt"])
+
+    def test_see_question_overrides_task(self):
+        path = str(Path(__file__).resolve().parent / "sample.png")
+        Path(path).write_bytes(png_bytes())
+        captured = {}
+
+        def fake_describe_file(image, prompt, **kwargs):
+            captured["prompt"] = prompt
+            return "ok"
+
+        with mock.patch.object(vb, "describe_file", side_effect=fake_describe_file):
+            with mock.patch("sys.stdout", new_callable=io.StringIO):
+                code = vb.main(["see", path, "--task", "ocr", "-q", "自定义问题"])
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["prompt"], "自定义问题")
+
     def test_doctor_checks_key(self):
         with mock.patch.dict(vb._ENV, {"VISION_API_KEY": "sk-test"}, clear=False):
             self.assertEqual(vb.cmd_doctor(mock.Mock()), 0)
         with mock.patch.dict(vb._ENV, {"VISION_API_KEY": ""}, clear=False):
             self.assertEqual(vb.cmd_doctor(mock.Mock()), 1)
+
+
+class FakeHeaders:
+    def get_content_type(self):
+        return "image/png"
+
+
+class FakeResponse:
+    headers = FakeHeaders()
+
+    def read(self):
+        return png_bytes()
+
+    def close(self):
+        pass
+
+
+class ImageSourceTests(unittest.TestCase):
+    def test_load_url_image_downloads(self):
+        with mock.patch.object(vb.urllib.request, "urlopen", return_value=FakeResponse()):
+            mime, data = vb.load_url_image("https://example.com/a.png")
+        self.assertEqual(mime, "image/png")
+        self.assertEqual(data, png_bytes())
+
+    def test_describe_source_url_calls_describe_bytes(self):
+        captured = {}
+
+        def fake_describe_bytes(data, mime, prompt, **kwargs):
+            captured["data"] = data
+            captured["prompt"] = prompt
+            return "ok"
+
+        with mock.patch.object(vb, "load_url_image", return_value=("image/png", png_bytes())):
+            with mock.patch.object(vb, "describe_bytes", side_effect=fake_describe_bytes):
+                text = vb.describe_source("https://example.com/a.png", "描述", api_key="sk-test")
+        self.assertEqual(text, "ok")
+        self.assertEqual(captured["data"], png_bytes())
+        self.assertEqual(captured["prompt"], "描述")
+
+
+class LatestImageTests(unittest.TestCase):
+    def _session_line(self, image_data: bytes) -> str:
+        url = "data:image/png;base64," + base64.b64encode(image_data).decode("ascii")
+        return json.dumps(
+            {
+                "timestamp": "2026-08-04T00:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "content": [{"type": "input_image", "image_url": url, "detail": "high"}],
+                },
+            },
+            ensure_ascii=False,
+        )
+
+    def test_find_latest_pasted_image_parses_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions" / "2026" / "08" / "04"
+            session_dir.mkdir(parents=True)
+            (session_dir / "rollout.jsonl").write_text(
+                self._session_line(png_bytes()) + "\n", encoding="utf-8"
+            )
+            mime, data = vb.find_latest_pasted_image(session_dir=Path(tmp) / "sessions")
+        self.assertEqual(mime, "image/png")
+        self.assertEqual(data, png_bytes())
+
+    def test_find_latest_pasted_image_prefers_newest_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions"
+            session_dir.mkdir(parents=True)
+            older = session_dir / "older.jsonl"
+            newer = session_dir / "newer.jsonl"
+            older.write_text(self._session_line(png_bytes()) + "\n", encoding="utf-8")
+            newer.write_text(self._session_line(b"newest-image") + "\n", encoding="utf-8")
+            os.utime(older, (1000000, 1000000))
+            os.utime(newer, (2000000, 2000000))
+            mime, data = vb.find_latest_pasted_image(session_dir=session_dir)
+        self.assertEqual(data, b"newest-image")
+
+    def test_find_latest_pasted_image_missing_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                vb.find_latest_pasted_image(session_dir=Path(tmp) / "sessions")
 
 
 class ProviderTests(unittest.TestCase):

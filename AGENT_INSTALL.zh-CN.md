@@ -31,8 +31,12 @@
 
    ```bash
    agent-vision status
-   agent-vision see <image-path> -q "What is in this image?"
+   agent-vision see <图片路径> -q "What is in this image?"
+   agent-vision see https://example.com/image.png --task ocr
+   agent-vision see --latest
    ```
+
+   对 Codex，还建议让用户粘贴一张图片，或让 Agent 用内置 `view_image` 打开本地图片；两者都会经过本地代理，应返回文字描述而不是 modality 报错。
 
 6. 如果用户之后要求回滚被自动修改的 Agent：
 

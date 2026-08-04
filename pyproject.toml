@@ -5,13 +5,28 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-vision"
 version = "1.0.2"
-description = "Give any AI agent vision capability: image to text for text-only agents."
+description = "Codex vision bridge for DeepSeek V4 Flash: give text-only models image capability in Codex via a free local image-to-text proxy (GLM-4V-Flash or any OpenAI-compatible vision API)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Simon" }]
-keywords = ["vision", "agent", "codex", "claude", "cursor", "opencode", "ocr", "proxy", "llm"]
+keywords = [
+    "codex",
+    "codex-vision",
+    "deepseek",
+    "deepseek-v4-flash",
+    "vision",
+    "vision-bridge",
+    "image-to-text",
+    "proxy",
+    "glm-4v",
+    "openai-compatible",
+    "responses-api",
+    "text-only-model",
+    "ocr",
+    "agent",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
