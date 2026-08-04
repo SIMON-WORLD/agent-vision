@@ -16,31 +16,6 @@ Text-only agents cannot see pasted screenshots, local images, charts, or error d
 - Ask the agent to inspect a file, and the `see` command sends it to a vision API and returns a factual description.
 - Keep your existing model, key, and workflow. Everything is local, reversible, and free by default.
 
-## Demo
-
-![Order success](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
-![Error dialog](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
-
-*Sample test screenshots generated locally to verify OCR and the vision pipeline.*
-
-```bash
-agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
-```
-
-```text
-===== examples/sample-order-success.png =====
-The order number is 202608030013, and the amount is ¥520.00.
-```
-
-```bash
-agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
-```
-
-```text
-===== examples/sample-error-dialog.png =====
-The error shown is "Unauthorized" with an error code of 401.
-```
-
 ## Architecture
 
 ```mermaid

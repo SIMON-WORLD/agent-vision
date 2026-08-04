@@ -31,8 +31,7 @@
 
    ```bash
    agent-vision status
-   agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
-   agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
+   agent-vision see <image-path> -q "What is in this image?"
    ```
 
 6. 如果用户之后要求回滚被自动修改的 Agent：

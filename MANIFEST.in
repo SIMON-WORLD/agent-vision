@@ -4,4 +4,3 @@ include LICENSE
 include providers.example.json
 include AGENT_INSTALL.md
 include AGENT_INSTALL.zh-CN.md
-recursive-include examples *.png

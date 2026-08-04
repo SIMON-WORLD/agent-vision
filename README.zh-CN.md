@@ -16,31 +16,6 @@
 - 让 Agent 查看文件时，`see` 命令会把图片发给视觉 API，返回可验证的事实描述。
 - 保留你现有的模型、API Key 和工作流。全部本地化、可回滚，默认免费。
 
-## Demo
-
-![订单成功](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
-![报错弹窗](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
-
-*本地程序生成的测试截图，用于验证 OCR 和视觉链路。*
-
-```bash
-agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
-```
-
-```text
-===== examples/sample-order-success.png =====
-The order number is 202608030013, and the amount is ¥520.00.
-```
-
-```bash
-agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
-```
-
-```text
-===== examples/sample-error-dialog.png =====
-The error shown is "Unauthorized" with an error code of 401.
-```
-
 ## 架构
 
 ```mermaid

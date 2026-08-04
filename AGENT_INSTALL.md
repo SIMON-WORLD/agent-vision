@@ -31,8 +31,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 
    ```bash
    agent-vision status
-   agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
-   agent-vision see examples/sample-error-dialog.png -q "What error is shown and what is the error code?"
+   agent-vision see <image-path> -q "What is in this image?"
    ```
 
 6. If the user later asks to roll back an auto-patched agent:
