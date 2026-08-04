@@ -199,6 +199,46 @@ class SetupCommandTests(unittest.TestCase):
             self.assertEqual(av.PROVIDERS["zhipu"]["model"], "glm-4v-flash")
             self.assertFalse(providers_file.exists())
 
+    def test_setup_reloads_env_so_vision_test_can_read_key(self):
+        # Regression: setup used to write .env then verify in the same process
+        # without refreshing the module-level env cache, so the immediate
+        # vision test reported "VISION_API_KEY not set".
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env"
+            providers_file = Path(tmp) / "providers.json"
+            saved_env = dict(av._ENV)
+            saved_dotenv = dict(av._DOTENV)
+            try:
+                with mock.patch.object(av, "ENV_FILE", env_file), mock.patch.object(
+                    av, "CUSTOM_PROVIDERS_FILE", providers_file
+                ):
+                    code = av.cmd_setup(setup_args(provider="free", api_key="reload-secret"))
+                self.assertEqual(code, 0)
+                self.assertEqual(av.cfg("VISION_API_KEY"), "reload-secret")
+            finally:
+                av._ENV.clear()
+                av._ENV.update(saved_env)
+                av._DOTENV.clear()
+                av._DOTENV.update(saved_dotenv)
+
+    def test_reload_env_reads_newly_written_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env"
+            env_file.write_text("VISION_API_KEY=fresh-key\n", encoding="utf-8")
+            saved_env = dict(av._ENV)
+            saved_dotenv = dict(av._DOTENV)
+            try:
+                with mock.patch.object(av, "ENV_FILE", env_file):
+                    av.reload_env()
+                self.assertEqual(av.cfg("VISION_API_KEY"), "fresh-key")
+            finally:
+                av._ENV.clear()
+                av._ENV.update(saved_env)
+                av._DOTENV.clear()
+                av._DOTENV.update(saved_dotenv)
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
