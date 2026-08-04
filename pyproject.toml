@@ -43,8 +43,8 @@ classifiers = [
 agent-vision = "agent_vision.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/SIMON-WORLD/agent-vision"
-Repository = "https://github.com/SIMON-WORLD/agent-vision"
+Homepage = "https://github.com/SIMON-WORLD/codex-deepseek-vision"
+Repository = "https://github.com/SIMON-WORLD/codex-deepseek-vision"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

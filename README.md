@@ -1,10 +1,10 @@
-# agent-vision
+# codex-deepseek-vision
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
+[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/codex-deepseek-vision)](https://github.com/SIMON-WORLD/codex-deepseek-vision/releases)
 
-**Codex vision bridge for DeepSeek V4 Flash and other text-only models.** DeepSeek V4 Flash now speaks the Responses protocol and runs inside Codex/ChatGPT, but the model itself is text-only and cannot see images. agent-vision is a free local vision proxy: pasted images and `view_image` calls are converted into text through an OpenAI-compatible vision API (free GLM-4V-Flash by default) before DeepSeek reasons. No Ollama, no GPU, no model swap.
+**Codex vision bridge for DeepSeek V4 Flash and other text-only models.** Package/CLI: `agent-vision`. DeepSeek V4 Flash now speaks the Responses protocol and runs inside Codex/ChatGPT, but the model itself is text-only and cannot see images. agent-vision is a free local vision proxy: pasted images and `view_image` calls are converted into text through an OpenAI-compatible vision API (free GLM-4V-Flash by default) before DeepSeek reasons. No Ollama, no GPU, no model swap.
 
 **English** | [中文](README.zh-CN.md)
 
@@ -62,7 +62,7 @@ Click a provider name to open its official sign-up/console page and create an AP
 Paste this into your AI agent:
 
 ```text
-Deploy agent-vision from https://github.com/SIMON-WORLD/agent-vision per AGENT_INSTALL.md. Use the free Zhipu provider. Vision API key: <KEY>. Tell me when I need to restart Codex.
+Deploy agent-vision from https://github.com/SIMON-WORLD/codex-deepseek-vision per AGENT_INSTALL.md. Use the free Zhipu provider. Vision API key: <KEY>. Tell me when I need to restart Codex.
 ```
 
 ### One-click setup (recommended)
@@ -70,8 +70,8 @@ Deploy agent-vision from https://github.com/SIMON-WORLD/agent-vision per AGENT_I
 No terminal skills are required. Install Python 3.9+, clone the repository, then run:
 
 ```bash
-git clone https://github.com/SIMON-WORLD/agent-vision.git
-cd agent-vision
+git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
+cd codex-deepseek-vision
 pip install .
 agent-vision setup
 ```
@@ -142,6 +142,20 @@ agent-vision doctor
 # List vision provider presets
 agent-vision providers
 ```
+
+## Self-test in 3 minutes
+
+Anyone with Python 3.9+ can verify the bridge on a fresh machine:
+
+```bash
+git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
+cd codex-deepseek-vision
+pip install .
+agent-vision setup
+agent-vision status
+```
+
+Then paste an image in Codex or ask the agent to call `view_image` on a local image. For a zero-setup fresh machine, open this repository in GitHub Codespaces: the devcontainer pre-installs the package, and all commands above run the same way.
 
 ## Testing
 
