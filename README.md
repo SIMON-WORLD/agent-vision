@@ -58,7 +58,7 @@ flowchart LR
 
 | Agent | Integration | Status |
 |---|---|---|
-| Codex | Safe auto-patch: rewrites only the active provider's `base_url` to the local proxy; keeps `wire_api` and keys; backup and rollback | Fully automatic |
+| Codex | Safe auto-patch: rewrites only the active provider's `base_url` to the local proxy, keeps `wire_api` and keys, and declares image input for the active model in a local model catalog (e.g. cc-switch) when present so pasted images are allowed; backup and rollback | Fully automatic |
 | OpenCode | Auto-patches `opencode.json` with an OpenAI-compatible provider | Fully automatic |
 | Claude Code | Detected and guided; Claude speaks the Anthropic protocol, so a protocol-compatible gateway is required | Manual steps provided |
 | Cursor | Detected and guided; Cursor exposes the base URL override only through Settings -> Models | Manual steps provided |
@@ -178,6 +178,7 @@ python -m unittest discover -s tests -v
 
 - **Do I need a GPU or Ollama?** No. Vision is handled by a remote OpenAI-compatible API; the default Zhipu `glm-4v-flash` is free.
 - **Is my agent key exposed?** No. The proxy passes the original Authorization header through, so your main model key stays in the agent's existing config.
+- **Why does Codex still refuse pasted images ("model does not support image input")?** Codex decides whether the UI accepts pasted images from its model catalog. When you load models from a local catalog (e.g. cc-switch's `model_catalog_json`), `setup` now also declares image input for the active text-only model (with a timestamped backup; `rollback codex` restores it). If you switch models with cc-switch afterwards, that file may be regenerated — rerun `agent-vision setup` to re-apply.
 - **Can I use a paid provider?** Yes. Choose Quality or Custom in setup, or edit `.env` / `providers.json`.
 - **What happens if the vision API fails?** Proxy mode fails open and forwards the original request unchanged, so normal chat is not blocked.
 - **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `.env` is gitignored; never commit or share it.

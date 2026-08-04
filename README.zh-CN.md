@@ -58,7 +58,7 @@ flowchart LR
 
 | Agent | 接入方式 | 状态 |
 |---|---|---|
-| Codex | 安全自动修改：只把当前活动 provider 的 `base_url` 改为本地代理，不动 `wire_api` 和 Key；带备份和回滚 | 全自动 |
+| Codex | 安全自动修改：只把当前活动 provider 的 `base_url` 改为本地代理，不动 `wire_api` 和 Key；若存在本地模型目录（如 cc-switch），会同时为当前模型声明图片输入，客户端才允许粘贴图片；带备份和回滚 | 全自动 |
 | OpenCode | 自动在 `opencode.json` 里添加 OpenAI 兼容 provider | 全自动 |
 | Claude Code | 检测并给出指引；Claude 使用 Anthropic 协议，需要协议兼容网关 | 提供手动步骤 |
 | Cursor | 检测并给出指引；Cursor 只在 Settings -> Models 里提供 Base URL 覆盖开关 | 提供手动步骤 |
@@ -178,6 +178,7 @@ python -m unittest discover -s tests -v
 
 - **需要 GPU 或 Ollama 吗？** 不需要。视觉部分由远程 OpenAI 兼容 API 完成，默认智谱 `glm-4v-flash` 免费。
 - **主模型 API Key 会泄露吗？** 不会。代理原样透传 Authorization，主模型 Key 仍然只存在 Agent 原有配置里。
+- **为什么 Codex 仍提示“此模型不支持图片输入”？** Codex 客户端按模型目录判断是否允许粘贴图片。若你通过本地模型目录（如 cc-switch 的 `model_catalog_json`）加载模型，`setup` 现在会同时为当前纯文本模型声明图片输入（带时间戳备份，`rollback codex` 可还原）。之后用 cc-switch 切换模型可能重新生成该目录并覆盖声明，重跑 `agent-vision setup` 即可。
 - **可以用付费服务吗？** 可以。在 setup 里选 Quality 或 Custom，或者直接改 `.env` / `providers.json`。
 - **视觉 API 挂了会怎样？** 代理模式 fail-open，原请求原样转发，不会阻塞正常聊天。
 - **图片隐私如何？** 图片只会发送到你配置的服务商（默认智谱）。发送敏感截图前请先查看对方隐私政策。`.env` 已被 `.gitignore` 排除，不要提交或分享。

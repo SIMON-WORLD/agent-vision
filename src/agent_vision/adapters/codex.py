@@ -9,6 +9,7 @@ provider table would break startup.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -86,6 +87,10 @@ class CodexAdapter(AgentAdapter):
         config_exists = self.config_path.exists()
         model = self._current_model_config()
         state = self.read_json(self.state_path)
+        catalog_path = self._catalog_path()
+        catalog_patched = False
+        if catalog_path and catalog_path.exists() and model.get("model"):
+            catalog_patched = not self._catalog_needs_patch(catalog_path, model["model"])
         return {
             "agent": self.id,
             "name": self.name,
@@ -98,6 +103,8 @@ class CodexAdapter(AgentAdapter):
             "wire_api": model.get("wire_api", ""),
             "patched": model.get("base_url") == PROXY_BASE_URL,
             "patch_mode": "base-url",
+            "catalog_path": str(catalog_path) if catalog_path else "",
+            "catalog_patched": catalog_patched,
             "backup_path": str(state.get("backup_path", "")) if state else "",
             "upstream": str(state.get("upstream", "")) if state else "",
         }
@@ -116,6 +123,52 @@ class CodexAdapter(AgentAdapter):
         if base_url and "127.0.0.1" not in base_url and "localhost" not in base_url:
             return base_url
         return ""
+
+
+    def _catalog_path(self) -> Path | None:
+        """Resolve model_catalog_json from config.toml (relative to codex_dir)."""
+        if not self.config_path.exists():
+            return None
+        top = self._top_level(self.config_path.read_text(encoding="utf-8"))
+        raw = top.get("model_catalog_json", "")
+        if not raw:
+            return None
+        candidate = Path(raw)
+        return candidate if candidate.is_absolute() else self.codex_dir / candidate
+
+    @classmethod
+    def _catalog_needs_patch(cls, catalog_path: Path, model: str) -> bool:
+        """True when the active model is not yet declared to accept image input."""
+        if not model or not catalog_path.exists():
+            return False
+        try:
+            data = json.loads(catalog_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        for entry in data.get("models", []):
+            if entry.get("slug") == model:
+                return "image" not in (entry.get("input_modalities") or [])
+        return False
+
+    @classmethod
+    def render_catalog_patch(cls, data: dict[str, object], model: str) -> dict[str, object]:
+        """Return a copy of the catalog with image input declared for the model."""
+        import copy
+
+        patched = copy.deepcopy(data)
+        for entry in patched.get("models", []):
+            if entry.get("slug") == model:
+                modalities = entry.setdefault("input_modalities", [])
+                if "image" not in modalities:
+                    modalities.append("image")
+                entry["supports_image_detail_original"] = True
+                break
+        return patched
+
+    def _catalog_backup(self, catalog_path: Path) -> Path:
+        backup_path = self.unique_backup_path(catalog_path, "agent-vision")
+        backup_path.write_text(catalog_path.read_text(encoding="utf-8"), encoding="utf-8")
+        return backup_path
 
     @classmethod
     def render_patched_config(
@@ -173,11 +226,28 @@ class CodexAdapter(AgentAdapter):
                 "summary": "write agent-vision state: backup path, provider, upstream",
             },
         ]
+        catalog_path = self._catalog_path()
+        catalog_updated = False
+        if catalog_path and self._catalog_needs_patch(catalog_path, str(detection["model"])):
+            catalog_updated = True
+            files.append(
+                {
+                    "file": str(catalog_path),
+                    "action": "modify",
+                    "backup": str(self.unique_backup_path(catalog_path, "agent-vision")),
+                    "summary": (
+                        f"declare image input for model '{detection['model']}' in model catalog; "
+                        "keeps all other catalog entries untouched"
+                    ),
+                }
+            )
         return {
             "agent": self.id,
             "detection": detection,
             "files": files,
             "upstream": resolved_upstream,
+            "catalog_path": str(catalog_path) if catalog_path else "",
+            "catalog_updated": catalog_updated,
         }
 
     def apply(self, upstream: str | None = None) -> dict[str, object]:
@@ -188,6 +258,18 @@ class CodexAdapter(AgentAdapter):
         backup_path = self.backup()
         original = backup_path.read_text(encoding="utf-8")
         self.config_path.write_text(self.render_patched_config(original), encoding="utf-8")
+        catalog_path = self._catalog_path()
+        catalog_backup_path = ""
+        catalog_updated = False
+        if catalog_path and self._catalog_needs_patch(catalog_path, str(detection["model"])):
+            catalog_backup_path = str(self._catalog_backup(catalog_path))
+            data = json.loads(catalog_path.read_text(encoding="utf-8"))
+            patched = self.render_catalog_patch(data, str(detection["model"]))
+            catalog_path.write_text(
+                json.dumps(patched, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            catalog_updated = True
         self.write_json(
             self.state_path,
             {
@@ -201,6 +283,9 @@ class CodexAdapter(AgentAdapter):
                 "base_url": PROXY_BASE_URL,
                 "upstream": resolved_upstream,
                 "patch_mode": "base-url",
+                "catalog_path": str(catalog_path) if catalog_path else "",
+                "catalog_backup_path": catalog_backup_path,
+                "catalog_updated": catalog_updated,
                 "patched_at": self.timestamp(),
             },
         )
@@ -212,6 +297,9 @@ class CodexAdapter(AgentAdapter):
             "upstream": resolved_upstream,
             "model": str(detection["model"]),
             "model_provider": str(detection["model_provider"]),
+            "catalog_path": str(catalog_path) if catalog_path else "",
+            "catalog_backup_path": catalog_backup_path,
+            "catalog_updated": catalog_updated,
         }
 
     def rollback(self) -> dict[str, object]:
@@ -222,10 +310,19 @@ class CodexAdapter(AgentAdapter):
         if not backup_path.exists():
             raise FileNotFoundError(f"backup missing: {backup_path}")
         self.config_path.write_text(backup_path.read_text(encoding="utf-8"), encoding="utf-8")
+        catalog_restored_from = ""
+        catalog_backup = state.get("catalog_backup_path")
+        if catalog_backup:
+            catalog_backup_path = Path(str(catalog_backup))
+            catalog_path = Path(str(state.get("catalog_path") or self._catalog_path() or ""))
+            if catalog_backup_path.exists() and catalog_path and catalog_path.exists():
+                catalog_path.write_text(catalog_backup_path.read_text(encoding="utf-8"), encoding="utf-8")
+                catalog_restored_from = str(catalog_backup_path)
         self.state_path.unlink(missing_ok=True)
         return {
             "agent": self.id,
             "config_path": str(self.config_path),
             "restored_from": str(backup_path),
             "state_path": str(self.state_path),
+            "catalog_restored_from": catalog_restored_from,
         }

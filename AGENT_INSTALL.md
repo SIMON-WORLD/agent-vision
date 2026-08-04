@@ -26,7 +26,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    agent-vision setup
    ```
 
-   The wizard detects the installed agent, writes `.env` (and `providers.json` for custom providers) into the user config directory, starts the local runtime, and verifies the vision API. For Codex it backs up and only rewrites the active provider's `base_url` (never `wire_api`, model or keys); for OpenCode it adds the OpenAI-compatible provider automatically.
+   The wizard detects the installed agent, writes `.env` (and `providers.json` for custom providers) into the user config directory, starts the local runtime, and verifies the vision API. For Codex it backs up and only rewrites the active provider's `base_url` (never `wire_api`, model or keys); when Codex loads its model list from a local model catalog (e.g. cc-switch), it also declares image input for the active model so the client accepts pasted images (with a backup). For OpenCode it adds the OpenAI-compatible provider automatically.
 5. Verify the pipeline explicitly:
 
    ```bash
