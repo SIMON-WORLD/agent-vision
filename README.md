@@ -21,6 +21,8 @@ Text-only agents cannot see pasted screenshots, local images, charts, or error d
 ![Order success](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
 ![Error dialog](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
 
+*Sample test screenshots generated locally to verify OCR and the vision pipeline.*
+
 ```bash
 agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
 ```
@@ -67,14 +69,16 @@ agent-vision accepts any OpenAI-compatible vision API. Built-in presets cover th
 
 | Provider | Model examples | Cost |
 |---|---|---|
-| Zhipu | `glm-4v-flash`, `glm-4.6v-flash` | Free |
-| Alibaba DashScope | `qwen-vl-max`, `qwen3-vl-flash` | Pay-as-you-go / free quota |
-| OpenAI | `gpt-4o-mini`, `gpt-4o` | Pay-as-you-go |
-| Google Gemini | `gemini-2.0-flash` | Free tier available |
-| Groq | Qwen vision models | Free plan available |
-| SiliconFlow | Qwen2.5-VL series | Free quota for new users |
-| OpenRouter | Free and paid vision models | Mixed |
+| [Zhipu](https://open.bigmodel.cn/) | `glm-4v-flash`, `glm-4.6v-flash` | Free |
+| [Alibaba DashScope](https://bailian.console.aliyun.com/) | `qwen-vl-max`, `qwen3-vl-flash` | Pay-as-you-go / free quota |
+| [OpenAI](https://platform.openai.com/api-keys) | `gpt-4o-mini`, `gpt-4o` | Pay-as-you-go |
+| [Google Gemini](https://aistudio.google.com/apikey) | `gemini-2.0-flash` | Free tier available |
+| [Groq](https://console.groq.com/) | Qwen vision models | Free plan available |
+| [SiliconFlow](https://cloud.siliconflow.cn/) | Qwen2.5-VL series | Free quota for new users |
+| [OpenRouter](https://openrouter.ai/) | Free and paid vision models | Mixed |
 | Self-hosted vLLM / Ollama | Any VLM | Hardware only |
+
+Click a provider name to open its official sign-up/console page and create an API key.
 
 ## Install
 

@@ -21,6 +21,8 @@
 ![订单成功](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-order-success.png)
 ![报错弹窗](https://raw.githubusercontent.com/SIMON-WORLD/agent-vision/main/examples/sample-error-dialog.png)
 
+*本地程序生成的测试截图，用于验证 OCR 和视觉链路。*
+
 ```bash
 agent-vision see examples/sample-order-success.png -q "What is the order number and amount?"
 ```
@@ -67,14 +69,16 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 
 | 服务商 | 模型示例 | 费用 |
 |---|---|---|
-| 智谱 | `glm-4v-flash`, `glm-4.6v-flash` | 免费 |
-| 阿里百炼 | `qwen-vl-max`, `qwen3-vl-flash` | 按量 / 免费额度 |
-| OpenAI | `gpt-4o-mini`, `gpt-4o` | 按量 |
-| Google Gemini | `gemini-2.0-flash` | 有免费层 |
-| Groq | Qwen 视觉模型 | 有免费计划 |
-| 硅基流动 | Qwen2.5-VL 系列 | 新用户免费额度 |
-| OpenRouter | 免费和付费视觉模型 | 混合 |
+| [智谱](https://open.bigmodel.cn/) | `glm-4v-flash`, `glm-4.6v-flash` | 免费 |
+| [阿里百炼](https://bailian.console.aliyun.com/) | `qwen-vl-max`, `qwen3-vl-flash` | 按量 / 免费额度 |
+| [OpenAI](https://platform.openai.com/api-keys) | `gpt-4o-mini`, `gpt-4o` | 按量 |
+| [Google Gemini](https://aistudio.google.com/apikey) | `gemini-2.0-flash` | 有免费层 |
+| [Groq](https://console.groq.com/) | Qwen 视觉模型 | 有免费计划 |
+| [硅基流动](https://cloud.siliconflow.cn/) | Qwen2.5-VL 系列 | 新用户免费额度 |
+| [OpenRouter](https://openrouter.ai/) | 免费和付费视觉模型 | 混合 |
 | 自部署 vLLM / Ollama | 任意 VLM | 仅硬件成本 |
+
+点击服务商名称可直接打开官网/控制台创建 API Key。
 
 ## 安装
 
