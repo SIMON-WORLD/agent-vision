@@ -1,5 +1,7 @@
 # Agent Installation Guide
 
+Repository: https://github.com/SIMON-WORLD/codex-deepseek-vision
+
 This project is designed so that anyone who can chat with an AI agent can install and configure it. No shell or programming skills are required.
 
 ## One-line prompt for the user

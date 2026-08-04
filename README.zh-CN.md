@@ -1,10 +1,10 @@
-# agent-vision
+# codex-deepseek-vision
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
+[![Release](https://img.shields.io/github/v/release/SIMON-WORLD/codex-deepseek-vision)](https://github.com/SIMON-WORLD/codex-deepseek-vision/releases)
 
-**Codex + DeepSeek V4 Flash 看图桥（vision bridge）。** DeepSeek V4 Flash 已接入 Responses 协议、可部署到 Codex/ChatGPT，但模型本身是纯文本模型，不能直接看图。agent-vision 是本地视觉代理：粘贴图片和 `view_image` 调用会先经 OpenAI 兼容视觉 API（默认免费 `glm-4v-flash`）转成文字，再交给 DeepSeek 推理。不需要 Ollama、不需要 GPU、不需要换模型。
+**Codex + DeepSeek V4 Flash 看图桥（vision bridge）。** 包/CLI 名：`agent-vision`。 DeepSeek V4 Flash 已接入 Responses 协议、可部署到 Codex/ChatGPT，但模型本身是纯文本模型，不能直接看图。agent-vision 是本地视觉代理：粘贴图片和 `view_image` 调用会先经 OpenAI 兼容视觉 API（默认免费 `glm-4v-flash`）转成文字，再交给 DeepSeek 推理。不需要 Ollama、不需要 GPU、不需要换模型。
 
 [English](README.md) | **中文**
 
@@ -62,7 +62,7 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 把下面这句话发给你的 Agent：
 
 ```text
-帮我从 https://github.com/SIMON-WORLD/agent-vision 部署 agent-vision，按 AGENT_INSTALL.zh-CN.md 执行，用免费智谱，视觉 API Key 是 <KEY>，完成后提醒我重启 Codex。
+帮我从 https://github.com/SIMON-WORLD/codex-deepseek-vision 部署 agent-vision，按 AGENT_INSTALL.zh-CN.md 执行，用免费智谱，视觉 API Key 是 <KEY>，完成后提醒我重启 Codex。
 ```
 
 ### 一键配置（推荐）
@@ -70,7 +70,7 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 不需要懂终端。安装 Python 3.9+，克隆仓库后运行：
 
 ```bash
-git clone https://github.com/SIMON-WORLD/agent-vision.git
+git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
 cd agent-vision
 pip install .
 agent-vision setup
@@ -142,6 +142,20 @@ agent-vision doctor
 # 查看视觉服务商预设
 agent-vision providers
 ```
+
+## 3 分钟自测
+
+任何有 Python 3.9+ 的电脑都可以这样验证：
+
+```bash
+git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
+cd codex-deepseek-vision
+pip install .
+agent-vision setup
+agent-vision status
+```
+
+然后在 Codex 里粘贴图片，或让 Agent 用 `view_image` 打开本地图片。想用“零配置的新机器”，直接把这个仓库开进 GitHub Codespaces：devcontainer 会自动装好包，以上命令在云端同样可用。
 
 ## 测试
 

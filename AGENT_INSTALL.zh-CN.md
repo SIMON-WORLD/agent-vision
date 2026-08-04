@@ -1,5 +1,7 @@
 # Agent 安装指南
 
+仓库地址：https://github.com/SIMON-WORLD/codex-deepseek-vision
+
 这个项目设计给“只要会和 AI Agent 聊天”的用户：不需要会终端，也不需要会编程。
 
 ## 用户一句话指令
