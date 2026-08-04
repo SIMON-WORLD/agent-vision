@@ -29,7 +29,7 @@ agent-vision see examples/sample-order-success.png -q "What is the order number 
 
 ```text
 ===== examples/sample-order-success.png =====
-The order number is 202608030013, and the amount is 520.00 yuan.
+The order number is 202608030013, and the amount is ¥520.00.
 ```
 
 ```bash
@@ -38,7 +38,7 @@ agent-vision see examples/sample-error-dialog.png -q "What error is shown and wh
 
 ```text
 ===== examples/sample-error-dialog.png =====
-The error shown is "Unauthorized" with the error code 401.
+The error shown is "Unauthorized" with an error code of 401.
 ```
 
 ## Architecture
@@ -81,6 +81,14 @@ agent-vision accepts any OpenAI-compatible vision API. Built-in presets cover th
 Click a provider name to open its official sign-up/console page and create an API key.
 
 ## Install
+
+### One-line deploy (recommended)
+
+Paste this into your AI agent:
+
+```text
+Deploy agent-vision from https://github.com/SIMON-WORLD/agent-vision per AGENT_INSTALL.md. Use the free Zhipu provider. Vision API key: <KEY>. Tell me when I need to restart Codex.
+```
 
 ### One-click setup (recommended)
 

@@ -29,7 +29,7 @@ agent-vision see examples/sample-order-success.png -q "What is the order number 
 
 ```text
 ===== examples/sample-order-success.png =====
-The order number is 202608030013, and the amount is 520.00 yuan.
+The order number is 202608030013, and the amount is ¥520.00.
 ```
 
 ```bash
@@ -38,7 +38,7 @@ agent-vision see examples/sample-error-dialog.png -q "What error is shown and wh
 
 ```text
 ===== examples/sample-error-dialog.png =====
-The error shown is "Unauthorized" with the error code 401.
+The error shown is "Unauthorized" with an error code of 401.
 ```
 
 ## 架构
@@ -81,6 +81,14 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 点击服务商名称可直接打开官网/控制台创建 API Key。
 
 ## 安装
+
+### 一句话部署（推荐）
+
+把下面这句话发给你的 Agent：
+
+```text
+帮我从 https://github.com/SIMON-WORLD/agent-vision 部署 agent-vision，按 AGENT_INSTALL.zh-CN.md 执行，用免费智谱，视觉 API Key 是 <KEY>，完成后提醒我重启 Codex。
+```
 
 ### 一键配置（推荐）
 
