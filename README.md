@@ -71,7 +71,7 @@ No terminal skills are required. Install Python 3.9+, clone the repository, then
 
 ```bash
 git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
-cd agent-vision
+cd codex-deepseek-vision
 pip install .
 agent-vision setup
 ```

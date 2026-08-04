@@ -71,7 +71,7 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 
 ```bash
 git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
-cd agent-vision
+cd codex-deepseek-vision
 pip install .
 agent-vision setup
 ```
