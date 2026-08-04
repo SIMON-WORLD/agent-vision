@@ -1072,6 +1072,8 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     print(f"  config: {result['config_path']}")
     print(f"  restored from: {result['restored_from']}")
     print(f"  state removed: {result['state_path']}")
+    if result.get("catalog_restored_from"):
+        print(f"  catalog restored from: {result['catalog_restored_from']}")
     return 0
 
 
@@ -1132,6 +1134,7 @@ def collect_health(
         "provider_configured": bool(ready["key_set"]),
         "codex_detected": codex_detected,
         "codex_patched": bool(codex.get("patched")),
+        "codex_catalog_patched": bool(codex.get("catalog_patched")),
         "codex_connected": codex_detected and bool(codex.get("patched")) and bool(rt["running"]),
         "agents": agent_states,
         "vision_available": vision_available,
@@ -1158,6 +1161,10 @@ def print_health(health: dict[str, object]) -> None:
     print("Agent:")
     if health["codex_detected"]:
         print(f"{mark(bool(health['codex_connected']))} Codex connected")
+        print(
+            "    catalog: image input "
+            + ("declared" if health.get("codex_catalog_patched") else "missing (will patch on setup)")
+        )
     else:
         print(f"{mark(False)} Codex not detected")
     print()

@@ -29,6 +29,43 @@ ORIGINAL_CONFIG = (
 )
 
 
+CATALOG_CONFIG = ORIGINAL_CONFIG.replace(
+    'model = "deepseek-v4-flash"\n',
+    'model = "deepseek-v4-flash"\nmodel_catalog_json = "cc-switch-model-catalog.json"\n',
+    1,
+)
+
+
+def catalog_content(text_only: bool = True) -> str:
+    flash_mods = ["text"] if text_only else ["text", "image"]
+    return json.dumps(
+        {
+            "models": [
+                {
+                    "slug": "deepseek-v4-flash",
+                    "display_name": "DeepSeek V4 Flash",
+                    "input_modalities": list(flash_mods),
+                    "supports_image_detail_original": not text_only,
+                },
+                {
+                    "slug": "deepseek-v4-pro",
+                    "display_name": "DeepSeek V4 Pro",
+                    "input_modalities": ["text"],
+                    "supports_image_detail_original": False,
+                },
+            ]
+        },
+        indent=2,
+    )
+
+
+def make_adapter_with_catalog(tmp: str, text_only: bool = True) -> CodexAdapter:
+    codex_dir = Path(tmp)
+    (codex_dir / "config.toml").write_text(CATALOG_CONFIG, encoding="utf-8")
+    (codex_dir / "cc-switch-model-catalog.json").write_text(catalog_content(text_only), encoding="utf-8")
+    return CodexAdapter(codex_dir=codex_dir)
+
+
 class FakeRuntime:
     log_file = Path("runtime.log")
 
@@ -273,6 +310,84 @@ class StatusTests(unittest.TestCase):
             result = av.run_vision_test()
         self.assertTrue(result["ok"])
         self.assertEqual(result["text"], "OK")
+
+
+
+class CatalogPatchTests(unittest.TestCase):
+    def test_detect_reports_catalog_not_patched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter_with_catalog(tmp, text_only=True)
+            detection = adapter.detect()
+            self.assertIn("cc-switch-model-catalog.json", str(detection["catalog_path"]))
+            self.assertFalse(detection["catalog_patched"])
+
+    def test_detect_reports_catalog_patched_when_image_declared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter_with_catalog(tmp, text_only=False)
+            detection = adapter.detect()
+            self.assertTrue(detection["catalog_patched"])
+
+    def test_detect_skips_catalog_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter(tmp)
+            detection = adapter.detect()
+            self.assertEqual(detection["catalog_path"], "")
+            self.assertFalse(detection["catalog_patched"])
+
+    def test_plan_includes_catalog_entry_when_needed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter_with_catalog(tmp, text_only=True)
+            plan = adapter.plan(upstream="https://api.deepseek.com")
+            self.assertTrue(plan["catalog_updated"])
+            self.assertEqual(len(plan["files"]), 3)
+            catalog_files = [f for f in plan["files"] if "catalog" in str(f.get("file", ""))]
+            self.assertEqual(len(catalog_files), 1)
+            self.assertIn("image input", catalog_files[0]["summary"])
+            self.assertFalse(Path(catalog_files[0]["backup"]).exists())
+
+    def test_plan_keeps_two_files_without_catalog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter(tmp)
+            plan = adapter.plan(upstream="https://api.deepseek.com")
+            self.assertFalse(plan["catalog_updated"])
+            self.assertEqual(len(plan["files"]), 2)
+
+    def test_apply_patches_catalog_and_records_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter_with_catalog(tmp, text_only=True)
+            result = adapter.apply(upstream="https://api.deepseek.com")
+            self.assertTrue(result["catalog_updated"])
+            data = json.loads(adapter.config_path.parent.joinpath("cc-switch-model-catalog.json").read_text(encoding="utf-8"))
+            flash = next(m for m in data["models"] if m["slug"] == "deepseek-v4-flash")
+            self.assertIn("image", flash["input_modalities"])
+            self.assertTrue(flash["supports_image_detail_original"])
+            pro = next(m for m in data["models"] if m["slug"] == "deepseek-v4-pro")
+            self.assertNotIn("image", pro["input_modalities"])
+            state = json.loads(adapter.state_path.read_text(encoding="utf-8"))
+            self.assertTrue(state["catalog_updated"])
+            self.assertTrue(Path(str(state["catalog_backup_path"])).exists())
+            self.assertTrue(Path(str(result["catalog_backup_path"])).exists())
+
+    def test_rollback_restores_catalog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = make_adapter_with_catalog(tmp, text_only=True)
+            catalog_path = adapter.config_path.parent.joinpath("cc-switch-model-catalog.json")
+            original = catalog_path.read_text(encoding="utf-8")
+            adapter.apply(upstream="https://api.deepseek.com")
+            self.assertNotEqual(catalog_path.read_text(encoding="utf-8"), original)
+            result = adapter.rollback()
+            self.assertEqual(catalog_path.read_text(encoding="utf-8"), original)
+            self.assertTrue(result["catalog_restored_from"])
+
+    def test_render_catalog_patch_preserves_other_models(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = json.loads(catalog_content(text_only=True))
+            patched = CodexAdapter.render_catalog_patch(data, "deepseek-v4-flash")
+            flash = next(m for m in patched["models"] if m["slug"] == "deepseek-v4-flash")
+            self.assertIn("image", flash["input_modalities"])
+            pro = next(m for m in patched["models"] if m["slug"] == "deepseek-v4-pro")
+            self.assertNotIn("image", pro["input_modalities"])
+            self.assertEqual(len(patched["models"]), 2)
 
 
 if __name__ == "__main__":
