@@ -17,7 +17,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 1. Install the package from PyPI (simplest), or clone the repository and install from source when PyPI is unreachable:
 
    ```bash
-   pip install agent-vision
+   pip install codex-deepseek-vision
    # or
    git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
    cd codex-deepseek-vision

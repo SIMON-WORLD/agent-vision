@@ -70,7 +70,7 @@ Deploy agent-vision from https://github.com/SIMON-WORLD/codex-deepseek-vision pe
 Install Python 3.9+, then run:
 
 ```bash
-pip install agent-vision
+pip install codex-deepseek-vision
 agent-vision setup
 ```
 

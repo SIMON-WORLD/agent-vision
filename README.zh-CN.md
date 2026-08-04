@@ -70,7 +70,7 @@ agent-vision 接受任意 OpenAI 兼容视觉 API。内置常见服务商预设�
 安装 Python 3.9+ 后运行：
 
 ```bash
-pip install agent-vision
+pip install codex-deepseek-vision
 agent-vision setup
 ```
 

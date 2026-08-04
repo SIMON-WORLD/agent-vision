@@ -17,7 +17,7 @@
 1. 从 PyPI 安装（最简单）；如果 PyPI 不可达，再克隆仓库从源码安装：
 
    ```bash
-   pip install agent-vision
+   pip install codex-deepseek-vision
    # 或
    git clone https://github.com/SIMON-WORLD/codex-deepseek-vision.git
    cd codex-deepseek-vision
