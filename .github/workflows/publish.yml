@@ -23,5 +23,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
+          test -n "${{ secrets.PYPI_API_TOKEN }}"
+          case "${{ secrets.PYPI_API_TOKEN }}" in pypi-*) ;; *) echo "PYPI_API_TOKEN does not look like a PyPI token"; exit 1;; esac
           python -m pip install --upgrade twine
-          python -m twine upload dist/*
+          python -m twine upload --verbose dist/*
