@@ -4,7 +4,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
-**给任何 AI Agent 加上看图能力。** 当你的 Agent 主模型是纯文本模型（DeepSeek V4、GLM、MiMo 等）时，agent-vision 通过一个 OpenAI 兼容的免费视觉 API 把图片转成文字，主模型继续负责推理。不需要 Ollama、不需要 GPU、不需要换模型。
+**给 Codex 里的 DeepSeek V4 Flash 补上看图能力。** DeepSeek V4 Flash 已接入 Responses 协议、可部署到 Codex/ChatGPT，但模型本身不支持图片。agent-vision 在本地通过免费 OpenAI 兼容视觉 API 把粘贴的图片转成文字，再交给 DeepSeek 推理。不需要 Ollama、不需要 GPU、不需要换模型。
 
 [English](README.md) | **中文**
 

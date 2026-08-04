@@ -4,7 +4,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/SIMON-WORLD/agent-vision)](https://github.com/SIMON-WORLD/agent-vision/releases)
 
-**Give any AI agent vision capability.** If your agent's model is text-only (DeepSeek V4, GLM, MiMo, or any non-vision model), agent-vision adds image understanding through a free OpenAI-compatible vision API. The vision model converts images into text; your main model keeps reasoning. No Ollama, no GPU, no model swap.
+**Give Codex's DeepSeek V4 Flash image capability.** DeepSeek V4 Flash now speaks the Responses protocol and runs inside Codex/ChatGPT, but the model itself is text-only. agent-vision converts pasted images into text locally through a free OpenAI-compatible vision API before DeepSeek reasons. No Ollama, no GPU, no model swap.
 
 **English** | [中文](README.zh-CN.md)
 
