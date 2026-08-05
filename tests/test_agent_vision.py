@@ -69,7 +69,7 @@ class RewriteTests(unittest.TestCase):
         self.assertEqual(part["type"], "input_text")
         self.assertIn("一张示意图", part["text"])
 
-    def test_fail_open_when_vision_fails(self):
+    def test_fail_closed_when_vision_fails(self):
         body = json.dumps(
             {
                 "messages": [
@@ -79,8 +79,12 @@ class RewriteTests(unittest.TestCase):
         ).encode("utf-8")
         with mock.patch.object(vb, "describe_bytes", side_effect=RuntimeError("boom")):
             new_body, replaced = vb.rewrite_body(body)
-        self.assertEqual(replaced, 0)
-        self.assertEqual(new_body, body)
+        self.assertEqual(replaced, 1)
+        payload = json.loads(new_body.decode("utf-8"))
+        parts = payload["messages"][0]["content"]
+        self.assertEqual(parts[0]["type"], "text")
+        self.assertIn("[image vision conversion failed: boom]", parts[0]["text"])
+        self.assertNotIn("image_url", json.dumps(payload))
 
     def test_invalid_body_passes_through(self):
         body = b"not json"

@@ -29,10 +29,12 @@ import platform
 import re
 import shutil
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from collections import OrderedDict
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
@@ -587,22 +589,34 @@ class _Rewrite:
         max_images: int = MAX_IMAGES_PER_REQUEST,
         model: str | None = None,
         base_url: str | None = None,
+        log: Callable[[str], None] | None = None,
     ) -> None:
         self.replaced = 0
         self.max_images = max_images
         self.model = model
         self.base_url = base_url
+        self.log = log
+        self.last_error: str | None = None
 
     def describe_data_url(self, data_url: str, focus: str) -> str | None:
+        self.last_error = None
         match = DATA_URL_RE.match(data_url)
         if not match:
+            self.last_error = "unsupported image data URL format"
             return None
         mime, b64 = match.group(1), match.group(2)
         try:
             data = base64.b64decode(b64)
-        except Exception:
+        except Exception as error:
+            self.last_error = f"invalid base64 image data: {error}"
             return None
-        if not data or len(data) > MAX_IMAGE_BYTES:
+        if not data:
+            self.last_error = "empty image data"
+            return None
+        if len(data) > MAX_IMAGE_BYTES:
+            self.last_error = (
+                f"image exceeds {MAX_IMAGE_BYTES // (1024 * 1024)} MB limit"
+            )
             return None
         prompt = DEFAULT_DESCRIBE_PROMPT
         if focus:
@@ -619,7 +633,10 @@ class _Rewrite:
                 base_url=self.base_url,
             )
         except Exception as error:
-            print(f"vision rewrite failed, passing image through: {error}", file=sys.stderr)
+            self.last_error = str(error) or error.__class__.__name__
+            print(f"vision rewrite failed: {self.last_error}", file=sys.stderr)
+            if self.log:
+                self.log(f"vision rewrite failed: {self.last_error}")
             return None
 
     def rewrite_content(self, content: object, chat: bool) -> object:
@@ -641,6 +658,21 @@ class _Rewrite:
                         }
                     )
                     continue
+                self.replaced += 1
+                reason = self.last_error or "unknown vision conversion error"
+                if self.log:
+                    self.log(f"image conversion failed, replacing image with marker: {reason}")
+                text_type = "text" if chat else "input_text"
+                out.append(
+                    {
+                        "type": text_type,
+                        "text": (
+                            "[image vision conversion failed: " + reason + "] "
+                            "请用户重新粘贴图片或稍后重试。"
+                        ),
+                    }
+                )
+                continue
             out.append(part)
         return out
 
@@ -650,6 +682,7 @@ def rewrite_body(
     max_images: int = MAX_IMAGES_PER_REQUEST,
     model: str | None = None,
     base_url: str | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> tuple[bytes, int]:
     """Replace image content parts with text. Returns (body, replaced_count)."""
     try:
@@ -658,7 +691,7 @@ def rewrite_body(
         return body, 0
     if not isinstance(payload, dict):
         return body, 0
-    rewrite = _Rewrite(max_images=max_images, model=model, base_url=base_url)
+    rewrite = _Rewrite(max_images=max_images, model=model, base_url=base_url, log=log)
     for item in payload.get("input") or []:
         if isinstance(item, dict) and isinstance(item.get("content"), list):
             item["content"] = rewrite.rewrite_content(item["content"], chat=False)
@@ -668,6 +701,24 @@ def rewrite_body(
     if rewrite.replaced == 0:
         return body, 0
     return json.dumps(payload, ensure_ascii=False).encode("utf-8"), rewrite.replaced
+
+
+class _ProxyLog:
+    """Append proxy diagnostics to a UTF-8 log file with a timestamp."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.lock = threading.Lock()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, message: str) -> None:
+        line = f"{datetime.now().isoformat(timespec='seconds')} {message}\n"
+        with self.lock:
+            try:
+                with open(self.path, "a", encoding="utf-8") as handle:
+                    handle.write(line)
+            except OSError:
+                pass
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -682,6 +733,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 max_images=self.server.max_images,
                 model=getattr(self.server, "model", None),
                 base_url=getattr(self.server, "base_url", None),
+                log=getattr(self.server, "logger", None),
             )
             if body
             else (body, 0)
@@ -748,12 +800,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
     do_OPTIONS = _forward
 
     def log_message(self, fmt: str, *args: object) -> None:
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        line = "%s - %s" % (self.address_string(), fmt % args)
+        sys.stderr.write(line + "\n")
+        logger = getattr(self.server, "logger", None)
+        if logger:
+            logger.write(line)
 
 
-def run_proxy(listen: str, upstream: str, max_images: int, provider: str | None = None) -> int:
-    if not cfg("VISION_API_KEY"):
-        print("warning: VISION_API_KEY not configured; images will pass through unchanged", file=sys.stderr)
+def run_proxy(
+    listen: str,
+    upstream: str,
+    max_images: int,
+    provider: str | None = None,
+    log_file: str | None = None,
+) -> int:
+    if log_file is None:
+        log_file = str(config_home.runtime_log_file().parent / "proxy.log")
+    logger = _ProxyLog(log_file)
+    key_ready = bool(cfg("VISION_API_KEY"))
+    if not key_ready:
+        message = (
+            "warning: VISION_API_KEY not configured; image conversion will fail "
+            "and images will be replaced with failure markers"
+        )
+        print(message, file=sys.stderr)
+        logger.write(message)
     try:
         base_url, model = resolve_provider(provider, None, None)
     except ValueError as error:
@@ -767,7 +838,13 @@ def run_proxy(listen: str, upstream: str, max_images: int, provider: str | None 
     server.max_images = max_images
     server.model = model
     server.base_url = base_url
-    print(f"vision bridge proxy listening on {listen} -> {upstream}", flush=True)
+    server.logger = logger
+    startup = (
+        f"vision bridge proxy listening on {listen} -> {upstream}; "
+        f"vision key configured: {key_ready}"
+    )
+    print(startup, flush=True)
+    logger.write(startup)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -1534,6 +1611,7 @@ def build_parser() -> argparse.ArgumentParser:
     proxy.add_argument("--upstream", required=True, help="origin to forward to, e.g. https://api.deepseek.com")
     proxy.add_argument("--max-images", type=int, default=MAX_IMAGES_PER_REQUEST)
     proxy.add_argument("--provider", default=None, help="provider preset id, see `providers`")
+    proxy.add_argument("--log-file", default=None, help="path to proxy log file (default: ~/.agent-vision/logs/proxy.log)")
     proxy.set_defaults(handler=run_proxy)
 
     start = sub.add_parser("start", help="start the local vision proxy in the background")
@@ -1586,7 +1664,7 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as error:
         print(f"warning: cannot initialize agent-vision config home: {error}", file=sys.stderr)
     if args.command == "proxy":
-        return args.handler(args.listen, args.upstream, args.max_images, args.provider)
+        return args.handler(args.listen, args.upstream, args.max_images, args.provider, args.log_file)
     return args.handler(args)
 
 

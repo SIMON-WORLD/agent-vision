@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import tempfile
 import unittest
 from unittest import mock
 
@@ -67,7 +68,7 @@ class RewriteTests(unittest.TestCase):
         self.assertEqual(part["type"], "input_text")
         self.assertIn("一张示意图", part["text"])
 
-    def test_fail_open_when_vision_fails(self):
+    def test_fail_closed_when_vision_fails(self):
         body = json.dumps(
             {
                 "messages": [
@@ -77,8 +78,67 @@ class RewriteTests(unittest.TestCase):
         ).encode("utf-8")
         with mock.patch.object(vb, "describe_bytes", side_effect=RuntimeError("boom")):
             new_body, replaced = vb.rewrite_body(body)
+        self.assertEqual(replaced, 1)
+        payload = json.loads(new_body.decode("utf-8"))
+        parts = payload["messages"][0]["content"]
+        self.assertEqual(parts[0]["type"], "text")
+        self.assertIn("[image vision conversion failed: boom]", parts[0]["text"])
+        self.assertNotIn("image_url", json.dumps(payload))
+
+    def test_failure_writes_to_log_callback(self):
+        body = json.dumps(
+            {
+                "messages": [
+                    {"role": "user", "content": [{"type": "image_url", "image_url": {"url": data_url()}}]}
+                ]
+            }
+        ).encode("utf-8")
+        lines: list[str] = []
+        with mock.patch.object(vb, "describe_bytes", side_effect=RuntimeError("boom")):
+            vb.rewrite_body(body, log=lines.append)
+        self.assertTrue(any("vision rewrite failed: boom" in line for line in lines))
+
+    def test_oversize_image_replaced_with_marker_without_api_call(self):
+        with mock.patch.object(vb, "MAX_IMAGE_BYTES", 16):
+            oversized = "data:image/png;base64," + base64.b64encode(b"x" * 32).decode("ascii")
+            body = json.dumps(
+                {"input": [{"role": "user", "content": [{"type": "input_image", "image_url": oversized}]}]}
+            ).encode("utf-8")
+            with mock.patch.object(vb, "describe_bytes", side_effect=AssertionError("must not call vision API")):
+                new_body, replaced = vb.rewrite_body(body)
+        self.assertEqual(replaced, 1)
+        payload = json.loads(new_body.decode("utf-8"))
+        part = payload["input"][0]["content"][0]
+        self.assertEqual(part["type"], "input_text")
+        self.assertIn("image vision conversion failed", part["text"])
+        self.assertIn("MB limit", part["text"])
+
+    def test_invalid_image_data_replaced_with_marker_without_api_call(self):
+        body = json.dumps(
+            {"input": [{"role": "user", "content": [{"type": "input_image", "image_url": "data:image/png;base64,!!!!"}]}]}
+        ).encode("utf-8")
+        with mock.patch.object(vb, "describe_bytes", side_effect=AssertionError("must not call vision API")):
+            new_body, replaced = vb.rewrite_body(body)
+        self.assertEqual(replaced, 1)
+        payload = json.loads(new_body.decode("utf-8"))
+        part = payload["input"][0]["content"][0]
+        self.assertIn("image vision conversion failed", part["text"])
+        self.assertTrue(any(k in part["text"] for k in ("empty image data", "invalid base64")))
+
+    def test_non_image_content_passes_through(self):
+        body = json.dumps(
+            {"input": [{"role": "user", "content": [{"type": "input_text", "text": "hello"}]}]}
+        ).encode("utf-8")
+        new_body, replaced = vb.rewrite_body(body)
         self.assertEqual(replaced, 0)
         self.assertEqual(new_body, body)
+
+    def test_proxy_log_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            logger = vb._ProxyLog(Path(tmp) / "proxy.log")
+            logger.write("hello proxy")
+            content = (Path(tmp) / "proxy.log").read_text(encoding="utf-8")
+            self.assertIn("hello proxy", content)
 
     def test_invalid_body_passes_through(self):
         body = b"not json"

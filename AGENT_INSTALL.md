@@ -43,7 +43,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    agent-vision see --latest
    ```
 
-   For Codex, also ask the user to paste an image or ask the agent to open a local image with the built-in `view_image`; both go through the local proxy and should return a text description instead of a modality error.
+   For Codex, ask the user to paste an image as the primary check; for local files use `agent-vision see <path>` as a fallback (the built-in `view_image` tool may be replaced with `[Unsupported Image]` by the current desktop client).
 
 6. If the user later asks to roll back an auto-patched agent:
 
@@ -54,6 +54,12 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 
 7. For Claude Code and Cursor, `agent-vision setup --agent claude --dry-run` and `agent-vision setup --agent cursor --dry-run` print the official manual steps. Do not invent config keys for these agents.
 8. Never commit or upload `.env`. Keep API keys in the user config directory, not in the repository. Report the chosen provider, the verification result, and any files that were backed up.
+
+## Troubleshooting: image not visible
+
+- If you see `[Unsupported Image]` or `[image vision conversion failed ...]`: vision conversion failed or the client blocked the image; ask the user to re-paste, or run `agent-vision see <path>` instead.
+- Failure reasons are logged to `~/.agent-vision/logs/proxy.log`; check this file first when debugging.
+- The built-in `view_image` tool result may be replaced with `[Unsupported Image]` by the current desktop client; pasted images are not affected.
 
 ## Rules for the agent
 

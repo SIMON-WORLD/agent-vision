@@ -43,7 +43,7 @@
    agent-vision see --latest
    ```
 
-   对 Codex，还建议让用户粘贴一张图片，或让 Agent 用内置 `view_image` 打开本地图片；两者都会经过本地代理，应返回文字描述而不是 modality 报错。
+   对 Codex，建议让用户粘贴一张图片验证；需要看本地文件时用 `agent-vision see <图片路径>` 兜底（内置 `view_image` 在当前桌面版可能被客户端替换成 `[Unsupported Image]`）。
 
 6. 如果用户之后要求回滚被自动修改的 Agent：
 
@@ -54,6 +54,12 @@
 
 7. 对 Claude Code 和 Cursor，执行 `agent-vision setup --agent claude --dry-run` 与 `agent-vision setup --agent cursor --dry-run` 会打印官方手动步骤。不要为这两个 Agent 编造配置键。
 8. 绝不提交或上传 `.env`。API Key 只放在用户配置目录，不要放进仓库。最后向用户汇报：选择的服务商、验证结果、备份了哪些文件。
+
+## 看图失败怎么办
+
+- 若看到 `[Unsupported Image]` 或 `[image vision conversion failed ...]`：视觉转换失败或客户端限制，请让用户重新粘贴图片，或改用 `agent-vision see <图片路径>`。
+- 失败原因会写入 `~/.agent-vision/logs/proxy.log`，排查时先看这个文件。
+- `view_image` 工具结果在当前桌面版可能被替换为 `[Unsupported Image]`，这是客户端限制，粘贴图片不受影响。
 
 ## Agent 守则
 
