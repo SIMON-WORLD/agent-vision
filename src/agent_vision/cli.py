@@ -1708,7 +1708,7 @@ def cmd_autostart(args: argparse.Namespace) -> int:
     src_root = config_home.legacy_source_root()
     content = render_autostart_vbs(sys.executable, upstream, src_root=src_root)
     directory.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8-sig")
+    target.write_text(content, encoding="mbcs")
     print(f"autostart enabled (startup file: {target})")
     print(f"  command: {sys.executable} -m agent_vision start --upstream {upstream}")
     return 0

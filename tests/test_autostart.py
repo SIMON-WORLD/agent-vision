@@ -46,8 +46,9 @@ class AutostartTests(unittest.TestCase):
         self.assertEqual(code, 0)
         target = self.startup / vb.AUTOSTART_FILENAME
         self.assertTrue(target.exists())
-        content = target.read_text(encoding="utf-8-sig")
+        content = target.read_text(encoding="utf-8")
         self.assertIn("-m agent_vision start --upstream", content)
+        self.assertFalse(content.startswith("\ufeff"))
 
     def test_source_tree_injects_pythonpath(self):
         src_root = Path(self.tmp.name) / "repo"
@@ -57,7 +58,7 @@ class AutostartTests(unittest.TestCase):
         ):
             code = vb.cmd_autostart(args)
         self.assertEqual(code, 0)
-        content = (self.startup / vb.AUTOSTART_FILENAME).read_text(encoding="utf-8-sig")
+        content = (self.startup / vb.AUTOSTART_FILENAME).read_text(encoding="utf-8")
         self.assertIn("PYTHONPATH", content)
         self.assertIn("src", content)
 
