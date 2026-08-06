@@ -155,6 +155,12 @@ class RuntimeManager:
                 "status": "already_running",
             }
         cmd = [sys.executable, "-m", "agent_vision", "proxy", "--listen", listen, "--upstream", upstream]
+        env = os.environ.copy()
+        src_root = config_home.legacy_source_root()
+        if src_root is not None:
+            src = str((src_root / "src").resolve())
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = src + (os.pathsep + existing if existing else "")
         flags = 0
         if os.name == "nt":
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -168,6 +174,7 @@ class RuntimeManager:
                 stdin=subprocess.DEVNULL,
                 creationflags=flags,
                 close_fds=True,
+                env=env,
             )
         finally:
             log_handle.close()

@@ -70,6 +70,28 @@ class RuntimeLifecycleTests(unittest.TestCase):
             self.assertEqual(state["upstream"], "https://api.deepseek.com")
             self.assertEqual(state["listen"], "127.0.0.1:19999")
 
+    def test_start_injects_src_pythonpath_from_source_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src_root = Path(tmp) / "repo"
+            manager = RuntimeManager(
+                state_file=Path(tmp) / "runtime.json",
+                repo_root=src_root,
+                default_listen="127.0.0.1:19999",
+            )
+            captured = {}
+
+            def fake_popen(cmd, **kwargs):
+                captured["cmd"] = cmd
+                captured["env"] = kwargs.get("env")
+                return FakeProc()
+
+            with mock.patch.object(runtime_mod.subprocess, "Popen", side_effect=fake_popen), mock.patch.object(
+                RuntimeManager, "wait_ready", return_value=True
+            ), mock.patch.object(runtime_mod.config_home, "legacy_source_root", return_value=src_root):
+                manager.start(upstream="https://api.deepseek.com", listen="127.0.0.1:19999")
+            self.assertIn("agent_vision", captured["cmd"])
+            self.assertIn(str((src_root / "src").resolve()), captured["env"]["PYTHONPATH"])
+
     def test_start_when_already_running_does_not_spawn(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager = RuntimeManager(
