@@ -139,6 +139,8 @@ agent-vision proxy --listen 127.0.0.1:19100 --upstream <上游地址>
 
 # 引导式配置
 agent-vision setup [--agent codex|opencode|claude|cursor] [--dry-run]
+# 完全免交互的一行命令（服务商 + Agent 一起配）：
+agent-vision setup --agent codex --provider free --yes
 
 # 健康状态
 agent-vision status [--test]

@@ -139,6 +139,8 @@ agent-vision proxy --listen 127.0.0.1:19100 --upstream <origin>
 
 # Guided setup
 agent-vision setup [--agent codex|opencode|claude|cursor] [--dry-run]
+# Fully non-interactive (provider + agent in one line):
+agent-vision setup --agent codex --provider free --yes
 
 # Health status
 agent-vision status [--test]
