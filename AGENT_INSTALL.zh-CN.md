@@ -44,6 +44,7 @@
    ```
 
    对 Codex，建议让用户粘贴一张图片验证；需要看本地文件时用 `agent-vision see <图片路径>` 兜底（内置 `view_image` 在当前桌面版可能被客户端替换成 `[Unsupported Image]`）。
+   Windows 用户建议执行一次 `agent-vision autostart --enable`，重启电脑后代理会自动启动，避免出现 `stream disconnected`。
 
 6. 如果用户之后要求回滚被自动修改的 Agent：
 
@@ -60,6 +61,7 @@
 - 若看到 `[Unsupported Image]` 或 `[image vision conversion failed ...]`：视觉转换失败或客户端限制，请让用户重新粘贴图片，或改用 `agent-vision see <图片路径>`。
 - 失败原因会写入 `~/.agent-vision/logs/proxy.log`，排查时先看这个文件。
 - `view_image` 工具结果在当前桌面版可能被替换为 `[Unsupported Image]`，这是客户端限制，粘贴图片不受影响。
+- 重启电脑后 Codex 无法对话（`stream disconnected`）：本地代理未启动，运行 `agent-vision start`，或先执行 `agent-vision autostart --enable` 让登录时自动拉起。
 
 ## Agent 守则
 

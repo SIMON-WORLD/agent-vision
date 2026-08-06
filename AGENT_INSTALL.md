@@ -44,6 +44,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    ```
 
    For Codex, ask the user to paste an image as the primary check; for local files use `agent-vision see <path>` as a fallback (the built-in `view_image` tool may be replaced with `[Unsupported Image]` by the current desktop client).
+   On Windows, recommend running `agent-vision autostart --enable` once so the proxy starts automatically at login and chat keeps working after a reboot.
 
 6. If the user later asks to roll back an auto-patched agent:
 
@@ -60,6 +61,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 - If you see `[Unsupported Image]` or `[image vision conversion failed ...]`: vision conversion failed or the client blocked the image; ask the user to re-paste, or run `agent-vision see <path>` instead.
 - Failure reasons are logged to `~/.agent-vision/logs/proxy.log`; check this file first when debugging.
 - The built-in `view_image` tool result may be replaced with `[Unsupported Image]` by the current desktop client; pasted images are not affected.
+- If Codex cannot chat after a reboot (`stream disconnected`), the local proxy is not running: run `agent-vision start`, or enable `agent-vision autostart --enable` so it starts at login.
 
 ## Rules for the agent
 

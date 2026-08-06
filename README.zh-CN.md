@@ -100,6 +100,9 @@ agent-vision start      # 后台启动本地视觉代理
 agent-vision status     # 查看安装、运行时、服务商、Agent、视觉状态
 agent-vision restart    # 重启本地代理
 agent-vision stop       # 停止本地代理
+agent-vision autostart --enable   # Windows：登录时自动启动代理（执行一次即可）
+agent-vision autostart --status   # 查看自启是否开启
+agent-vision autostart --disable  # 移除登录自启
 ```
 
 ### 回滚
@@ -178,6 +181,7 @@ python -m unittest discover -s tests -v
 - **Agent 能调用 Codex 内置的 `view_image` 吗？** 粘贴图片会正常走代理。但内置 `view_image` 工具在当前桌面版有限制：客户端会在图片到达代理之前把它替换成 `[Unsupported Image]`。需要看本地文件时请用 `agent-vision see <图片路径>`（或 `agent-vision see --latest` 恢复最近粘贴的图片）。
 - **可以用付费服务吗？** 可以。在 setup 里选 Quality 或 Custom，或者直接改 `.env` / `providers.json`。
 - **视觉 API 挂了会怎样？** 重试后仍失败时，代理会把图片替换成明确的失败标记（`[image vision conversion failed: <原因>]`），不再透传原图，Agent 可以请用户重新粘贴。失败原因会写入 `~/.agent-vision/logs/proxy.log`。
+- **重启电脑后 Codex 提示 `stream disconnected`？** 本地代理还没启动。先运行 `agent-vision start`，或执行一次 `agent-vision autostart --enable` 让代理登录时自动启动。如果已把 `base_url` 改回上游地址，请重跑 `agent-vision setup` 恢复视觉桥。
 - **图片隐私如何？** 图片只会发送到你配置的服务商（默认智谱）。发送敏感截图前请先查看对方隐私政策。`see --latest` 只从 Codex 会话文件提取图片字节，不读取或发送对话文本。`.env` 已被 `.gitignore` 排除，不要提交或分享。
 
 ## License

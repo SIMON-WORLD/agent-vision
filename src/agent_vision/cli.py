@@ -915,6 +915,18 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     print("vision base url:", cfg("VISION_BASE_URL", DEFAULT_VISION_BASE_URL))
     print("vision model:   ", cfg("VISION_MODEL", DEFAULT_VISION_MODEL))
     print("api key set:    ", "yes" if cfg("VISION_API_KEY") else "no")
+    try:
+        runtime = make_runtime_manager()
+        adapter = make_codex_adapter()
+        rt = runtime.status()
+        base_url = str(adapter.detect().get("base_url") or "")
+        if not rt.get("ready") and (
+            "127.0.0.1" in base_url or "localhost" in base_url
+        ):
+            print("proxy:          not ready (Codex points at the local proxy)")
+            print("hint:           run `agent-vision start` or `agent-vision autostart --enable`")
+    except Exception:
+        pass
     return 0 if cfg("VISION_API_KEY") else 1
 
 
@@ -1513,6 +1525,12 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(f"    model={codex.get('model') or '-'} provider={codex.get('model_provider') or '-'}")
     if codex.get("backup_path"):
         print(f"    backup={codex.get('backup_path')}")
+    if not health["runtime_running"] and (
+        "127.0.0.1" in str(codex.get("base_url") or "")
+        or "localhost" in str(codex.get("base_url") or "")
+    ):
+        print("\nHint: Codex base_url points at the local proxy, but the proxy is not running.")
+        print("Run `agent-vision start` now, or `agent-vision autostart --enable` to start it at login.")
     for agent_id in ("claude", "cursor", "opencode"):
         try:
             other = get_adapter(agent_id).detect()
@@ -1590,6 +1608,112 @@ def cmd_restart(args: argparse.Namespace) -> int:
     return 1
 
 
+AUTOSTART_FILENAME = "agent-vision-start.vbs"
+
+
+def autostart_dir(override: str | None = None) -> Path:
+    """Return the Windows per-user Startup folder (overridable for tests)."""
+    override = override or os.environ.get("AGENT_VISION_AUTOSTART_DIR")
+    if override:
+        return Path(override).expanduser()
+    if os.name != "nt" or not os.environ.get("APPDATA"):
+        raise NotImplementedError(
+            "autostart is only supported in the Windows user Startup folder"
+        )
+    return (
+        Path(os.environ["APPDATA"])
+        / "Microsoft"
+        / "Windows"
+        / "Start Menu"
+        / "Programs"
+        / "Startup"
+    )
+
+
+def autostart_vbs_path(override: str | None = None) -> Path:
+    return autostart_dir(override) / AUTOSTART_FILENAME
+
+
+def autostart_enabled(override: str | None = None) -> bool:
+    return autostart_vbs_path(override).exists()
+
+
+def _vbs_quote(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def render_autostart_vbs(
+    python: str,
+    upstream: str,
+    src_root: Path | None = None,
+) -> str:
+    """Render a hidden VBS launcher that starts the proxy at Windows login."""
+    lines = ['Set sh = CreateObject("WScript.Shell")']
+    if src_root is not None:
+        lines.append(f"sh.CurrentDirectory = {_vbs_quote(str(src_root))}")
+        src = (src_root / "src").resolve()
+        lines.append(
+            "sh.Environment("
+            + _vbs_quote("Process")
+            + ")("
+            + _vbs_quote("PYTHONPATH")
+            + ") = "
+            + _vbs_quote(str(src))
+        )
+    command = (
+        f"{_vbs_quote(python)} -m agent_vision start --upstream {_vbs_quote(upstream)}"
+    )
+    lines.append(f"sh.Run {_vbs_quote(command)}, 0, False")
+    return "\r\n".join(lines) + "\r\n"
+
+
+def cmd_autostart(args: argparse.Namespace) -> int:
+    enable = bool(getattr(args, "enable", False))
+    disable = bool(getattr(args, "disable", False))
+    status_only = bool(getattr(args, "status", False))
+    override = getattr(args, "startup_dir", None)
+    try:
+        target = autostart_vbs_path(override)
+        directory = autostart_dir(override)
+    except NotImplementedError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    if status_only:
+        print("enabled" if target.exists() else "disabled")
+        print(f"startup file: {target}")
+        return 0
+
+    if disable:
+        if target.exists():
+            target.unlink()
+            print(f"autostart disabled (removed {target})")
+        else:
+            print("autostart is not enabled")
+        return 0
+
+    if not enable:
+        print("usage: agent-vision autostart --enable|--disable|--status", file=sys.stderr)
+        return 2
+
+    runtime = make_runtime_manager()
+    adapter = make_codex_adapter()
+    upstream = resolve_proxy_upstream(getattr(args, "upstream", None), adapter, runtime)
+    if not upstream:
+        print(
+            "error: cannot resolve proxy upstream; pass --upstream or run setup first",
+            file=sys.stderr,
+        )
+        return 1
+    src_root = config_home.legacy_source_root()
+    content = render_autostart_vbs(sys.executable, upstream, src_root=src_root)
+    directory.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8-sig")
+    print(f"autostart enabled (startup file: {target})")
+    print(f"  command: {sys.executable} -m agent_vision start --upstream {upstream}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent-vision", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1626,6 +1750,14 @@ def build_parser() -> argparse.ArgumentParser:
     restart.add_argument("--listen", default=None, help="proxy listen address, default 127.0.0.1:19100")
     restart.add_argument("--upstream", default=None, help="upstream URL the proxy forwards to")
     restart.set_defaults(handler=cmd_restart)
+
+    autostart = sub.add_parser("autostart", help="manage Windows login autostart for the local proxy")
+    autostart.add_argument("--enable", action="store_true", help="install the login autostart entry")
+    autostart.add_argument("--disable", action="store_true", help="remove the login autostart entry")
+    autostart.add_argument("--status", action="store_true", help="show whether autostart is enabled")
+    autostart.add_argument("--upstream", default=None, help="upstream URL used by the autostart proxy")
+    autostart.add_argument("--startup-dir", default=None, help="override the Windows Startup folder (for testing)")
+    autostart.set_defaults(handler=cmd_autostart)
 
     doctor = sub.add_parser("doctor", help="check vision config")
     doctor.set_defaults(handler=cmd_doctor)
