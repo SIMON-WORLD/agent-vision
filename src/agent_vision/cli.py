@@ -1642,6 +1642,16 @@ def _vbs_quote(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
+def _vbs_bytes(content: str) -> bytes:
+    """Encode VBS launcher without a BOM; use ANSI on Windows."""
+    for encoding in ("mbcs", "ascii"):
+        try:
+            return content.encode(encoding)
+        except (LookupError, UnicodeEncodeError):
+            continue
+    return content.encode("utf-8")
+
+
 def render_autostart_vbs(
     python: str,
     upstream: str,
@@ -1708,7 +1718,7 @@ def cmd_autostart(args: argparse.Namespace) -> int:
     src_root = config_home.legacy_source_root()
     content = render_autostart_vbs(sys.executable, upstream, src_root=src_root)
     directory.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="mbcs")
+    target.write_bytes(_vbs_bytes(content))
     print(f"autostart enabled (startup file: {target})")
     print(f"  command: {sys.executable} -m agent_vision start --upstream {upstream}")
     return 0

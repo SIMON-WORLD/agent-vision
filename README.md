@@ -118,6 +118,16 @@ Every auto-patch creates a timestamped backup before modifying anything, and `ro
 
 `agent-vision setup` writes and manages `.env` inside the user config directory. For manual configuration, copy `.env.example` to `~/.agent-vision/.env` (Windows: `%USERPROFILE%\.agent-vision\.env`) and fill in the vision API key. Zhipu keys use the `{API Key ID}.{secret}` format. Do not add quotes; the loader strips surrounding quotes and whitespace.
 
+### API key options
+
+The simplest path is to tell your agent the key directly in the conversation (for example: "the vision API key is ..."). The agent writes it to `.env` and never prints it. If you do not want the key to appear in chat history, use one of these instead:
+
+1. Pre-fill `.env`: create `%USERPROFILE%\.agent-vision\.env` with `VISION_API_KEY=<your key>`, then ask the agent to run `agent-vision setup --agent codex --provider free --yes` directly.
+2. Environment variable: set `VISION_API_KEY` for the terminal or agent session; `setup` reads it automatically.
+3. Local key file: put the key in a local file (e.g. `C:\Users\<you>\vision-key.txt`) and tell the agent: "read this file, write it to ~/.agent-vision/.env, then delete the file".
+
+Keys only live in the local `.env`; they are never committed or logged. If a key was already shared in a chat you care about, rotate it in the provider console.
+
 | Variable | Default | Description |
 |---|---|---|
 | `VISION_API_KEY` | - | Vision API key (required) |

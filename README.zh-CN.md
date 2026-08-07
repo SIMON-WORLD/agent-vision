@@ -118,6 +118,16 @@ agent-vision rollback opencode
 
 `agent-vision setup` 会在用户配置目录里自动写入和管理 `.env`。手动配置时，把 `.env.example` 复制为 `~/.agent-vision/.env`（Windows：`%USERPROFILE%\.agent-vision\.env`）并填写视觉 API Key。智谱 Key 格式为 `{API Key ID}.{secret}`，不需要加引号；脚本会自动去掉值两侧的引号和空格。
 
+### API Key 配置方式
+
+最省事的方式：直接在会话里告诉 Agent Key（例如“视觉 API Key 是 ...”，Agent 会写入 `.env` 且不会打印出来）。如果担心 Key 出现在聊天记录里，可选以下任一种：
+
+1. 预填 `.env`：创建 `%USERPROFILE%\.agent-vision\.env`，写入 `VISION_API_KEY=<你的Key>`，然后让 Agent 直接执行 `agent-vision setup --agent codex --provider free --yes`。
+2. 环境变量：在终端或 Agent 会话里设置 `VISION_API_KEY`，`setup` 会自动读取。
+3. 本地 Key 文件：把 Key 放到本地文件（如 `C:\Users\<你>\vision-key.txt`），告诉 Agent：“读取该文件，写入 ~/.agent-vision/.env 后删除文件”。
+
+Key 只会保存在本地 `.env`，不会进入仓库或日志。如果 Key 已经在你介意的会话里出现过，建议到服务商控制台轮换一次。
+
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `VISION_API_KEY` | - | 视觉 API Key（必填） |
