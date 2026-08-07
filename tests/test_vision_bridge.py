@@ -68,6 +68,27 @@ class RewriteTests(unittest.TestCase):
         self.assertEqual(part["type"], "input_text")
         self.assertIn("一张示意图", part["text"])
 
+    def test_function_call_output_image_replaced(self):
+        body = json.dumps(
+            {
+                "input": [
+                    {
+                        "type": "function_call_output",
+                        "call_id": "call-1",
+                        "output": [{"type": "input_image", "image_url": data_url()}],
+                    }
+                ]
+            }
+        ).encode("utf-8")
+        with mock.patch.object(vb, "describe_bytes", return_value="一张示意图"):
+            new_body, replaced = vb.rewrite_body(body)
+        self.assertEqual(replaced, 1)
+        payload = json.loads(new_body.decode("utf-8"))
+        out = payload["input"][0]["output"]
+        self.assertEqual(out[0]["type"], "input_text")
+        self.assertIn("一张示意图", out[0]["text"])
+        self.assertNotIn("image_url", json.dumps(payload))
+
     def test_fail_closed_when_vision_fails(self):
         body = json.dumps(
             {

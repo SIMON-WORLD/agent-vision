@@ -693,8 +693,12 @@ def rewrite_body(
         return body, 0
     rewrite = _Rewrite(max_images=max_images, model=model, base_url=base_url, log=log)
     for item in payload.get("input") or []:
-        if isinstance(item, dict) and isinstance(item.get("content"), list):
+        if not isinstance(item, dict):
+            continue
+        if isinstance(item.get("content"), list):
             item["content"] = rewrite.rewrite_content(item["content"], chat=False)
+        if item.get("type") == "function_call_output" and isinstance(item.get("output"), list):
+            item["output"] = rewrite.rewrite_content(item["output"], chat=False)
     for message in payload.get("messages") or []:
         if isinstance(message, dict) and isinstance(message.get("content"), list):
             message["content"] = rewrite.rewrite_content(message["content"], chat=True)
