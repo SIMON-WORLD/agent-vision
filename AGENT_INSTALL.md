@@ -66,6 +66,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 
 ## Rules for the agent
 
+- Never modify system proxy, DNS, network adapters, WinHTTP/WinINET proxy, or global HTTP_PROXY/HTTPS_PROXY variables. When the network is unavailable, retry or switch the download source instead of setting a system proxy; otherwise ask the user to fix the network.
 - Ask before changing global agent configuration; every auto-patch creates a timestamped backup first.
 - Keep API keys inside the local `.env`; never print them.
 - If verification fails, stop and explain the error instead of guessing.
