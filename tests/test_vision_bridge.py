@@ -250,10 +250,24 @@ class CliTests(unittest.TestCase):
         self.assertIn("描述结果", out.getvalue())
 
     def test_doctor_checks_key(self):
-        with mock.patch.dict(vb._ENV, {"VISION_API_KEY": "sk-test"}, clear=False):
-            self.assertEqual(vb.cmd_doctor(mock.Mock()), 0)
-        with mock.patch.dict(vb._ENV, {"VISION_API_KEY": ""}, clear=False):
-            self.assertEqual(vb.cmd_doctor(mock.Mock()), 1)
+        rt = mock.Mock()
+        rt.status.return_value = {"ready": True}
+        adapter = mock.Mock()
+        adapter.detect.return_value = {
+            "base_url": "http://127.0.0.1:19100/v1",
+            "catalog_patched": True,
+        }
+        with mock.patch.object(vb, "ensure_launcher", return_value=Path("launcher")), mock.patch.object(
+            vb, "config_home_writable", return_value=True
+        ), mock.patch.object(vb, "make_runtime_manager", return_value=rt), mock.patch.object(
+            vb, "make_codex_adapter", return_value=adapter
+        ), mock.patch.object(vb, "autostart_enabled", return_value=True), mock.patch.object(
+            vb, "run_vision_test", return_value={"ok": True}
+        ):
+            with mock.patch.dict(vb._ENV, {"VISION_API_KEY": "sk-test"}, clear=False):
+                self.assertEqual(vb.cmd_doctor(mock.Mock()), 0)
+            with mock.patch.dict(vb._ENV, {"VISION_API_KEY": ""}, clear=False):
+                self.assertEqual(vb.cmd_doctor(mock.Mock()), 1)
 
 
 class ProviderTests(unittest.TestCase):

@@ -236,8 +236,11 @@ class SetupAgentTests(unittest.TestCase):
             with mock.patch.object(av, "make_codex_adapter", return_value=adapter), mock.patch.object(
                 av, "make_runtime_manager", return_value=FakeRuntime()
             ), mock.patch.object(av, "run_vision_test", return_value={"ok": True, "text": "OK"}), mock.patch.object(
-                av, "ENV_FILE", env_file
-            ), mock.patch.object(av, "CUSTOM_PROVIDERS_FILE", providers_file):
+                av, "config_home_writable", return_value=True
+            ), mock.patch.object(av, "ENV_FILE", env_file
+            ), mock.patch.object(av, "CUSTOM_PROVIDERS_FILE", providers_file), mock.patch.object(
+                av, "ensure_launcher", return_value=Path("launcher")
+            ):
                 buffer = io.StringIO()
                 with redirect_stdout(buffer):
                     code = av.cmd_setup(setup_args(agent="codex", provider="free", yes=True))

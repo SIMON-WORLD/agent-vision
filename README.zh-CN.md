@@ -130,6 +130,8 @@ agent-vision rollback opencode
 
 Key 只会保存在本地 `.env`，不会进入仓库或日志。如果 Key 已经在你介意的会话里出现过，建议到服务商控制台轮换一次。
 
+如果 `agent-vision` 不在 PATH 上，请用 setup 生成的稳定启动器（`%USERPROFILE%\.agent-vision\agent-vision.cmd`）或 `python -m agent_vision`。当沙箱不允许写用户配置时，setup 会在当前目录生成 `agent-vision-finalize.cmd` / `.ps1`，在普通终端运行其中一个即可完成安装。
+
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `VISION_API_KEY` | - | 视觉 API Key（必填） |
@@ -156,6 +158,7 @@ agent-vision setup --agent codex --provider free --yes
 
 # 健康状态
 agent-vision status [--test]
+agent-vision doctor   # 安装完成体检：入口、配置可写、代理、Codex、自启、视觉
 
 # 运行时生命周期
 agent-vision start | restart | stop

@@ -919,19 +919,65 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     print("vision base url:", cfg("VISION_BASE_URL", DEFAULT_VISION_BASE_URL))
     print("vision model:   ", cfg("VISION_MODEL", DEFAULT_VISION_MODEL))
     print("api key set:    ", "yes" if cfg("VISION_API_KEY") else "no")
+    checks: list[bool] = []
+
+    def report(name: str, ok: bool, hint: str = "") -> None:
+        mark = "✓" if ok else "✗"
+        line = f"{mark} {name}"
+        if hint:
+            line += f"  ({hint})"
+        print(line)
+        checks.append(ok)
+
+    entry_ok = bool(shutil.which("agent-vision"))
+    try:
+        launcher = ensure_launcher()
+        launcher_ok = True
+    except OSError:
+        launcher = None
+        launcher_ok = False
+    report(
+        "command entrypoint",
+        entry_ok or launcher_ok,
+        "use python -m agent_vision or " + str(launcher) if launcher else "use python -m agent_vision",
+    )
+    report(
+        "config home writable",
+        config_home_writable(),
+        "grant access or run the generated finalize script",
+    )
     try:
         runtime = make_runtime_manager()
-        adapter = make_codex_adapter()
-        rt = runtime.status()
-        base_url = str(adapter.detect().get("base_url") or "")
-        if not rt.get("ready") and (
-            "127.0.0.1" in base_url or "localhost" in base_url
-        ):
-            print("proxy:          not ready (Codex points at the local proxy)")
-            print("hint:           run `agent-vision start` or `agent-vision autostart --enable`")
+        runtime_ok = bool(runtime.status().get("ready"))
     except Exception:
-        pass
-    return 0 if cfg("VISION_API_KEY") else 1
+        runtime_ok = False
+    report("proxy running", runtime_ok, "run `agent-vision start` (or `python -m agent_vision start`)")
+    try:
+        adapter = make_codex_adapter()
+        detection = adapter.detect()
+        base_url = str(detection.get("base_url") or "")
+        codex_ok = "127.0.0.1" in base_url or "localhost" in base_url
+        catalog_ok = bool(detection.get("catalog_patched"))
+    except Exception:
+        codex_ok = False
+        catalog_ok = False
+    report(
+        "Codex points at local proxy",
+        codex_ok,
+        "run `agent-vision setup --agent codex --provider free --yes`",
+    )
+    report("model catalog image input", catalog_ok, "rerun setup to declare image input")
+    try:
+        autostart_ok = autostart_enabled()
+    except Exception:
+        autostart_ok = False
+    report("autostart enabled", autostart_ok, "run `agent-vision autostart --enable`")
+    if cfg("VISION_API_KEY"):
+        vision = run_vision_test()
+        report("vision available", bool(vision.get("ok")), str(vision.get("error") or ""))
+    else:
+        report("vision available", False, "VISION_API_KEY not set")
+    return 0 if cfg("VISION_API_KEY") and all(checks) else 1
 
 
 def cmd_providers(_args: argparse.Namespace) -> int:
@@ -1244,6 +1290,7 @@ def cmd_setup_provider(args: argparse.Namespace) -> int:
         print("\nDry run: no files were modified.")
         return 0
 
+
     ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
     CUSTOM_PROVIDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
@@ -1340,6 +1387,14 @@ def cmd_setup_full(args: argparse.Namespace, agent_id: str) -> int:
             print("cancelled")
             return 1
 
+    if not config_home_writable():
+        scripts = write_finalize_scripts()
+        print("\nWarning: cannot write the user config directory from this session.", file=sys.stderr)
+        print("A finalize script was generated. Run it in a normal terminal:", file=sys.stderr)
+        for script in scripts:
+            print(f"  {script}", file=sys.stderr)
+        return 0
+
     ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
     CUSTOM_PROVIDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     ENV_FILE.write_text(dotenv_content, encoding="utf-8")
@@ -1359,7 +1414,11 @@ def cmd_setup_full(args: argparse.Namespace, agent_id: str) -> int:
     try:
         result = adapter.apply(upstream=upstream)
     except (OSError, ValueError, NotImplementedError) as error:
+        scripts = write_finalize_scripts()
         print(f"error: {error}", file=sys.stderr)
+        print("A finalize script was generated. Run it in a normal terminal:", file=sys.stderr)
+        for script in scripts:
+            print(f"  {script}", file=sys.stderr)
         return 1
 
     print(f"\nDone. {detection['name']} config updated.")
@@ -1371,6 +1430,11 @@ def cmd_setup_full(args: argparse.Namespace, agent_id: str) -> int:
     if not vision.get("ok"):
         print(f"\nwarning: vision test failed: {vision.get('error')}", file=sys.stderr)
         return 1
+    try:
+        launcher = ensure_launcher()
+        print(f"\nLauncher: {launcher}")
+    except OSError as error:
+        print(f"warning: cannot create launcher: {error}", file=sys.stderr)
     return 0
 
 
@@ -1654,6 +1718,75 @@ def _vbs_bytes(content: str) -> bytes:
         except (LookupError, UnicodeEncodeError):
             continue
     return content.encode("utf-8")
+
+
+def config_home_writable() -> bool:
+    """Return True when the user config directory accepts writes."""
+    root = config_home.ensure_home()
+    probe = root / ".write-probe"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def launcher_cmd_path() -> Path:
+    return config_home.ensure_home() / "agent-vision.cmd"
+
+
+def render_launcher_cmd(python: str, src_root: Path | None = None) -> str:
+    """Render a stable .cmd that calls the package module without PATH help."""
+    lines = ["@echo off"]
+    if src_root is not None:
+        src = (src_root / "src").resolve()
+        lines.append(f'set "PYTHONPATH={src}"')
+    lines.append(f'"{python}" -m agent_vision %*')
+    return "\r\n".join(lines) + "\r\n"
+
+
+def ensure_launcher() -> Path:
+    target = launcher_cmd_path()
+    if not target.exists():
+        src_root = config_home.legacy_source_root()
+        content = render_launcher_cmd(sys.executable, src_root=src_root)
+        target.write_text(content, encoding="utf-8")
+    return target
+
+
+def render_finalize_cmd(python: str, src_root: Path | None = None) -> str:
+    lines = ["@echo off"]
+    if src_root is not None:
+        src = (src_root / "src").resolve()
+        lines.append(f'set "PYTHONPATH={src}"')
+    lines.append(f'"{python}" -m agent_vision setup --agent codex --provider free --yes')
+    lines.append(f'"{python}" -m agent_vision autostart --enable')
+    lines.append(f'"{python}" -m agent_vision status')
+    lines.append("pause")
+    return "\r\n".join(lines) + "\r\n"
+
+
+def render_finalize_ps1(python: str, src_root: Path | None = None) -> str:
+    lines = ["$ErrorActionPreference = 'Stop'"]
+    if src_root is not None:
+        src = (src_root / "src").resolve()
+        lines.append(f"$env:PYTHONPATH = '{src}'")
+    lines.append(f'& "{python}" -m agent_vision setup --agent codex --provider free --yes')
+    lines.append(f'& "{python}" -m agent_vision autostart --enable')
+    lines.append(f'& "{python}" -m agent_vision status')
+    return "\r\n".join(lines) + "\r\n"
+
+
+def write_finalize_scripts(base_dir: Path | None = None) -> list[Path]:
+    """Write finalize scripts next to the caller when the sandbox blocks user config."""
+    base = base_dir or Path.cwd()
+    src_root = config_home.legacy_source_root()
+    cmd_path = base / "agent-vision-finalize.cmd"
+    ps1_path = base / "agent-vision-finalize.ps1"
+    cmd_path.write_text(render_finalize_cmd(sys.executable, src_root=src_root), encoding="utf-8")
+    ps1_path.write_text(render_finalize_ps1(sys.executable, src_root=src_root), encoding="utf-8")
+    return [cmd_path, ps1_path]
 
 
 def watchdog_tick(

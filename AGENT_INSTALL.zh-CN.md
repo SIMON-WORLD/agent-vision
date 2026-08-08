@@ -45,6 +45,7 @@
 
    对 Codex，建议让用户粘贴一张图片验证；需要看本地文件时用 `agent-vision see <图片路径>` 兜底（内置 `view_image` 在当前桌面版可能被客户端替换成 `[Unsupported Image]`）。
    Windows 用户建议执行一次 `agent-vision autostart --enable`，重启电脑后代理会自动启动并由看门狗守护（默认 10 秒检查一次，19100 未监听就自动拉起），避免出现 `stream disconnected`。需要调间隔用 `--watchdog-interval 2-30`，想退回纯启动用 `--watchdog-interval 0`。
+   若 `agent-vision` 不在 PATH，使用 `%USERPROFILE%\.agent-vision\agent-vision.cmd`（setup 自动生成）或 `python -m agent_vision`；不要依赖系统 PATH。代理必须用提权或普通终端方式启动（`agent-vision start`），确保进程不挂在 Codex 会话下。若沙箱不允许写用户配置，setup 会在当前目录生成 `agent-vision-finalize.cmd/.ps1`，请让用户跑一次完成配置；完成后运行 `agent-vision doctor`，全绿才算部署完成。
 
 6. 如果用户之后要求回滚被自动修改的 Agent：
 

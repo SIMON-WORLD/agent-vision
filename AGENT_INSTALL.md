@@ -45,6 +45,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
 
    For Codex, ask the user to paste an image as the primary check; for local files use `agent-vision see <path>` as a fallback (the built-in `view_image` tool may be replaced with `[Unsupported Image]` by the current desktop client).
    On Windows, recommend running `agent-vision autostart --enable` once so the proxy starts automatically at login and a watchdog (default 10s) restarts it if 19100 is not listening. Tune with `--watchdog-interval 2-30`, or use `--watchdog-interval 0` for plain start.
+   If `agent-vision` is not on PATH, use the stable launcher `%USERPROFILE%\.agent-vision\agent-vision.cmd` (created by setup) or `python -m agent_vision`; do not rely on PATH. Start the proxy with an elevated or normal terminal (`agent-vision start`) so the process is not tied to the Codex session. If the sandbox blocks user config writes, setup writes `agent-vision-finalize.cmd/.ps1` next to the current directory; ask the user to run one of them to finish. After setup, run `agent-vision doctor`; the deployment is complete only when all checks pass.
 
 6. If the user later asks to roll back an auto-patched agent:
 

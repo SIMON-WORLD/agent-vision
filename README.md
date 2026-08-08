@@ -130,6 +130,8 @@ The simplest path is to tell your agent the key directly in the conversation (fo
 
 Keys only live in the local `.env`; they are never committed or logged. If a key was already shared in a chat you care about, rotate it in the provider console.
 
+If `agent-vision` is not on your PATH, use the stable launcher written by setup (`%USERPROFILE%\.agent-vision\agent-vision.cmd`) or `python -m agent_vision`. When the install sandbox blocks writing user config, setup writes `agent-vision-finalize.cmd` / `.ps1` next to the current directory; run one of them in a normal terminal to finish.
+
 | Variable | Default | Description |
 |---|---|---|
 | `VISION_API_KEY` | - | Vision API key (required) |
@@ -156,6 +158,7 @@ agent-vision setup --agent codex --provider free --yes
 
 # Health status
 agent-vision status [--test]
+agent-vision doctor   # full install checklist (entrypoint, config writable, proxy, Codex, autostart, vision)
 
 # Runtime lifecycle
 agent-vision start | restart | stop

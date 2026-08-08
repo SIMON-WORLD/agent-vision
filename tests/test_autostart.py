@@ -178,5 +178,71 @@ class WatchdogTests(unittest.TestCase):
         self.assertTrue(any("boom" in line for line in lines))
 
 
+class DeployHelpersTests(unittest.TestCase):
+    def test_render_launcher_cmd(self):
+        content = vb.render_launcher_cmd(r"D:\py\python.exe")
+        self.assertIn('"D:\\py\\python.exe" -m agent_vision %*', content)
+        src = Path(r"C:\repo")
+        content2 = vb.render_launcher_cmd(r"D:\py\python.exe", src_root=src)
+        self.assertIn("PYTHONPATH", content2)
+        self.assertIn("src", content2)
+
+    def test_write_finalize_scripts_contains_required_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            with mock.patch.object(vb.config_home, "legacy_source_root", return_value=None):
+                paths = vb.write_finalize_scripts(base_dir=base)
+            names = {p.name for p in paths}
+            self.assertIn("agent-vision-finalize.cmd", names)
+            self.assertIn("agent-vision-finalize.ps1", names)
+            cmd = (base / "agent-vision-finalize.cmd").read_text(encoding="utf-8")
+            ps1 = (base / "agent-vision-finalize.ps1").read_text(encoding="utf-8")
+            for text in (cmd, ps1):
+                self.assertIn("setup --agent codex --provider free --yes", text)
+                self.assertIn("autostart --enable", text)
+                self.assertIn("status", text)
+
+    def test_setup_generates_finalize_when_config_home_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._run_blocked_setup(tmp_dir)
+
+    def _run_blocked_setup(self, tmp_dir):
+        tmp = Path(tmp_dir) / "cwd"
+        tmp.mkdir()
+        adapter = mock.Mock()
+        adapter.plan.return_value = {
+            "detection": {"name": "Codex", "config_path": "config.toml"},
+            "files": [],
+            "manual_steps": [],
+        }
+        args = argparse.Namespace(
+            provider="free",
+            api_key="k",
+            base_url=None,
+            model=None,
+            cost=None,
+            dry_run=False,
+            yes=True,
+            proxy_upstream=None,
+            listen=None,
+            agent="codex",
+        )
+        with mock.patch.object(vb, "config_home_writable", return_value=False), mock.patch.object(
+            vb.Path, "cwd", return_value=tmp
+        ), mock.patch.object(
+            vb, "detect_environment", return_value={"python": "3", "system": "Windows", "machine": "x", "version": "1.0.8", "install": "site"}
+        ), mock.patch.object(vb, "detect_agents", return_value=[]), mock.patch.object(
+            vb, "select_provider_config", return_value=({"base_url": "x", "model": "m"}, "k")
+        ), mock.patch.object(vb, "provider_config_plan", return_value=("env", None)), mock.patch.object(
+            vb, "make_runtime_manager"
+        ), mock.patch.object(vb, "make_adapter", return_value=adapter), mock.patch.object(
+            vb, "resolve_proxy_upstream", return_value="https://api.deepseek.com"
+        ):
+            code = vb.cmd_setup_full(args, agent_id="codex")
+        self.assertEqual(code, 0)
+        self.assertTrue((tmp / "agent-vision-finalize.cmd").exists())
+        self.assertTrue((tmp / "agent-vision-finalize.ps1").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
