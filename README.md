@@ -100,9 +100,11 @@ agent-vision start      # start the local vision proxy in the background
 agent-vision status     # show installation, runtime, provider, agent and vision status
 agent-vision restart    # restart the local proxy
 agent-vision stop       # stop the local proxy
-agent-vision autostart --enable   # Windows: start the proxy automatically at login (run once)
-agent-vision autostart --status   # show whether autostart is enabled
-agent-vision autostart --disable  # remove the login autostart entry
+agent-vision autostart --enable                            # Windows: start + guard the proxy at login (watchdog, 10s)
+agent-vision autostart --enable --watchdog-interval 30     # custom health-check interval (2-30s)
+agent-vision autostart --enable --watchdog-interval 0      # plain start, no watchdog
+agent-vision autostart --status                            # show autostart mode and file
+agent-vision autostart --disable                           # remove the login autostart entry
 ```
 
 ### Rollback
@@ -193,7 +195,7 @@ python -m unittest discover -s tests -v
 - **Can the agent call Codex's built-in `view_image`?** Pasted images work through the proxy. The built-in `view_image` tool, however, is limited on the current Codex desktop build: the client replaces its result with `[Unsupported Image]` before it reaches the proxy. For local files, use `agent-vision see <path>` (or `agent-vision see --latest` for the last pasted image).
 - **Can I use a paid provider?** Yes. Choose Quality or Custom in setup, or edit `.env` / `providers.json`.
 - **What happens if the vision API fails?** After retries, the proxy replaces the image with a visible failure marker (`[image vision conversion failed: <reason>]`) instead of forwarding the raw image, so the agent can ask the user to re-paste. Failure reasons are logged to `~/.agent-vision/logs/proxy.log`.
-- **Codex fails with `stream disconnected` after a reboot?** The local proxy is not running yet. Run `agent-vision start`, or run `agent-vision autostart --enable` once so the proxy starts automatically at login. If you already changed `base_url` back to the upstream, rerun `agent-vision setup` to re-enable the vision bridge.
+- **Codex fails with `stream disconnected` after a reboot?** The local proxy is not running yet. Run `agent-vision start`, or run `agent-vision autostart --enable` once so the proxy starts automatically at login and a watchdog (default 10s) restarts it if 19100 is not listening. If you already changed `base_url` back to the upstream, rerun `agent-vision setup` to re-enable the vision bridge.
 - **Are images private?** Images are sent only to the provider you configure (Zhipu by default). Review the provider policy before sending sensitive screenshots. `see --latest` extracts only the image bytes from Codex session files and never reads or sends conversation text. `.env` is gitignored; never commit or share it.
 
 ## License

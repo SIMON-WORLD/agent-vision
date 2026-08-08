@@ -28,6 +28,7 @@ class AutostartTests(unittest.TestCase):
             "status": False,
             "upstream": None,
             "startup_dir": str(self.startup),
+            "watchdog_interval": 10,
         }
         defaults.update(overrides)
         return argparse.Namespace(**defaults)
@@ -39,7 +40,18 @@ class AutostartTests(unittest.TestCase):
         self.assertIn("https://api.deepseek.com", content)
         self.assertIn("python.exe", content)
 
-    def test_enable_writes_vbs(self):
+    def test_render_watchdog_command(self):
+        content = vb.render_autostart_vbs(
+            r"D:\py\python.exe", "https://api.deepseek.com", watchdog_interval=10
+        )
+        self.assertIn("-m agent_vision watchdog --interval 10 --upstream", content)
+        plain = vb.render_autostart_vbs(
+            r"D:\py\python.exe", "https://api.deepseek.com", watchdog_interval=0
+        )
+        self.assertIn("-m agent_vision start --upstream", plain)
+        self.assertNotIn("watchdog", plain)
+
+    def test_enable_writes_watchdog_vbs(self):
         args = self._args(enable=True, upstream="https://api.deepseek.com")
         with mock.patch.object(vb, "resolve_proxy_upstream", return_value="https://api.deepseek.com"):
             code = vb.cmd_autostart(args)
@@ -47,8 +59,17 @@ class AutostartTests(unittest.TestCase):
         target = self.startup / vb.AUTOSTART_FILENAME
         self.assertTrue(target.exists())
         content = target.read_text(encoding="utf-8")
-        self.assertIn("-m agent_vision start --upstream", content)
+        self.assertIn("-m agent_vision watchdog --interval 10 --upstream", content)
         self.assertFalse(content.startswith("\ufeff"))
+
+    def test_enable_watchdog_interval_zero_writes_start(self):
+        args = self._args(enable=True, upstream="https://api.deepseek.com", watchdog_interval=0)
+        with mock.patch.object(vb, "resolve_proxy_upstream", return_value="https://api.deepseek.com"):
+            code = vb.cmd_autostart(args)
+        self.assertEqual(code, 0)
+        content = (self.startup / vb.AUTOSTART_FILENAME).read_text(encoding="utf-8")
+        self.assertIn("-m agent_vision start --upstream", content)
+        self.assertNotIn("watchdog", content)
 
     def test_source_tree_injects_pythonpath(self):
         src_root = Path(self.tmp.name) / "repo"
@@ -69,14 +90,33 @@ class AutostartTests(unittest.TestCase):
         self.assertEqual(vb.cmd_autostart(args), 0)
         self.assertFalse(target.exists())
 
-    def test_status_reports_enabled(self):
+    def test_status_reports_watchdog_mode(self):
         target = self.startup / vb.AUTOSTART_FILENAME
-        target.write_text("x", encoding="utf-8")
+        target.write_text(
+            vb.render_autostart_vbs(r"D:\py\python.exe", "https://api.deepseek.com", watchdog_interval=10),
+            encoding="utf-8",
+        )
         args = self._args(status=True)
         with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
             code = vb.cmd_autostart(args)
         self.assertEqual(code, 0)
-        self.assertIn("enabled", out.getvalue())
+        value = out.getvalue()
+        self.assertIn("enabled", value)
+        self.assertIn("watchdog (10s)", value)
+
+    def test_status_reports_start_mode(self):
+        target = self.startup / vb.AUTOSTART_FILENAME
+        target.write_text(
+            vb.render_autostart_vbs(r"D:\py\python.exe", "https://api.deepseek.com", watchdog_interval=0),
+            encoding="utf-8",
+        )
+        args = self._args(status=True)
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            code = vb.cmd_autostart(args)
+        self.assertEqual(code, 0)
+        value = out.getvalue()
+        self.assertIn("enabled", value)
+        self.assertIn("mode: start", value)
 
     def test_status_reports_disabled(self):
         args = self._args(status=True)
@@ -100,6 +140,42 @@ class AutostartTests(unittest.TestCase):
             code = vb.cmd_autostart(args)
         self.assertEqual(code, 0)
         self.assertTrue((self.startup / vb.AUTOSTART_FILENAME).exists())
+
+
+class WatchdogTests(unittest.TestCase):
+    def _runtime(self, ready):
+        rt = mock.Mock()
+        rt.status.return_value = {"ready": ready, "running": ready}
+        rt.start.return_value = {
+            "status": "started",
+            "ready": True,
+            "pid": 7,
+            "listen": "127.0.0.1:19100",
+            "upstream": "https://api.deepseek.com",
+        }
+        return rt
+
+    def test_tick_starts_when_down(self):
+        rt = self._runtime(False)
+        started = vb.watchdog_tick(rt, "https://api.deepseek.com", "127.0.0.1:19100")
+        self.assertTrue(started)
+        rt.start.assert_called_once_with(
+            upstream="https://api.deepseek.com", listen="127.0.0.1:19100"
+        )
+
+    def test_tick_skips_when_ready(self):
+        rt = self._runtime(True)
+        started = vb.watchdog_tick(rt, "https://api.deepseek.com", "127.0.0.1:19100")
+        self.assertFalse(started)
+        rt.start.assert_not_called()
+
+    def test_tick_logs_start_failure(self):
+        rt = self._runtime(False)
+        rt.start.side_effect = RuntimeError("boom")
+        lines = []
+        started = vb.watchdog_tick(rt, "https://api.deepseek.com", "127.0.0.1:19100", log=lines.append)
+        self.assertFalse(started)
+        self.assertTrue(any("boom" in line for line in lines))
 
 
 if __name__ == "__main__":

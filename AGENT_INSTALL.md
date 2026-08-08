@@ -44,7 +44,7 @@ Set up agent-vision for me. Read AGENT_INSTALL.md and follow it end to end. Use 
    ```
 
    For Codex, ask the user to paste an image as the primary check; for local files use `agent-vision see <path>` as a fallback (the built-in `view_image` tool may be replaced with `[Unsupported Image]` by the current desktop client).
-   On Windows, recommend running `agent-vision autostart --enable` once so the proxy starts automatically at login and chat keeps working after a reboot.
+   On Windows, recommend running `agent-vision autostart --enable` once so the proxy starts automatically at login and a watchdog (default 10s) restarts it if 19100 is not listening. Tune with `--watchdog-interval 2-30`, or use `--watchdog-interval 0` for plain start.
 
 6. If the user later asks to roll back an auto-patched agent:
 

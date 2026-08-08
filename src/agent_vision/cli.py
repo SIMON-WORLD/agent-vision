@@ -1656,12 +1656,70 @@ def _vbs_bytes(content: str) -> bytes:
     return content.encode("utf-8")
 
 
+def watchdog_tick(
+    runtime: RuntimeManager,
+    upstream: str,
+    listen: str,
+    log: object | None = None,
+) -> bool:
+    """Run one watchdog check. Returns True when the proxy is ready after the tick."""
+    rt = runtime.status()
+    if rt.get("ready"):
+        return False
+    try:
+        result = runtime.start(upstream=upstream, listen=listen)
+    except (OSError, ValueError, RuntimeError) as error:
+        if log:
+            log(f"watchdog failed to start proxy: {error}")
+        return False
+    ready = bool(result.get("ready") or result.get("status") == "already_running")
+    if log:
+        log(
+            f"watchdog start attempt: status={result.get('status')} "
+            f"pid={result.get('pid')} ready={ready}"
+        )
+    return ready
+
+
+def cmd_watchdog(args: argparse.Namespace) -> int:
+    runtime = make_runtime_manager()
+    adapter = make_codex_adapter()
+    upstream = resolve_proxy_upstream(getattr(args, "upstream", None), adapter, runtime)
+    listen = getattr(args, "listen", None) or cfg("VISION_PROXY_LISTEN") or DEFAULT_LISTEN
+    if not upstream:
+        print(
+            "error: no upstream configured; pass --upstream or set VISION_PROXY_UPSTREAM",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        interval = max(2, int(getattr(args, "interval", 10) or 10))
+    except (TypeError, ValueError):
+        interval = 10
+    interval = min(interval, 30)
+    log_file = getattr(args, "log_file", None) or str(
+        config_home.runtime_log_file().parent / "watchdog.log"
+    )
+    logger = _ProxyLog(log_file)
+    startup = f"watchdog starting: check every {interval}s for {listen} -> {upstream}"
+    logger.write(startup)
+    print(startup, flush=True)
+    try:
+        while True:
+            watchdog_tick(runtime, upstream, listen, log=logger.write)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def render_autostart_vbs(
     python: str,
     upstream: str,
     src_root: Path | None = None,
+    watchdog_interval: int | None = None,
 ) -> str:
-    """Render a hidden VBS launcher that starts the proxy at Windows login."""
+    """Render a hidden VBS launcher that starts (or guards) the proxy at login."""
     lines = ['Set sh = CreateObject("WScript.Shell")']
     if src_root is not None:
         lines.append(f"sh.CurrentDirectory = {_vbs_quote(str(src_root))}")
@@ -1674,9 +1732,15 @@ def render_autostart_vbs(
             + ") = "
             + _vbs_quote(str(src))
         )
-    command = (
-        f"{_vbs_quote(python)} -m agent_vision start --upstream {_vbs_quote(upstream)}"
-    )
+    if watchdog_interval and watchdog_interval > 0:
+        command = (
+            f"{_vbs_quote(python)} -m agent_vision watchdog "
+            f"--interval {watchdog_interval} --upstream {_vbs_quote(upstream)}"
+        )
+    else:
+        command = (
+            f"{_vbs_quote(python)} -m agent_vision start --upstream {_vbs_quote(upstream)}"
+        )
     lines.append(f"sh.Run {_vbs_quote(command)}, 0, False")
     return "\r\n".join(lines) + "\r\n"
 
@@ -1694,7 +1758,17 @@ def cmd_autostart(args: argparse.Namespace) -> int:
         return 1
 
     if status_only:
-        print("enabled" if target.exists() else "disabled")
+        if target.exists():
+            content = target.read_text(encoding="utf-8", errors="replace")
+            print("enabled")
+            if "watchdog" in content:
+                match = re.search(r"--interval (\d+)", content)
+                interval = match.group(1) if match else "?"
+                print(f"mode: watchdog ({interval}s)")
+            else:
+                print("mode: start")
+        else:
+            print("disabled")
         print(f"startup file: {target}")
         return 0
 
@@ -1710,6 +1784,10 @@ def cmd_autostart(args: argparse.Namespace) -> int:
         print("usage: agent-vision autostart --enable|--disable|--status", file=sys.stderr)
         return 2
 
+    try:
+        watchdog_interval = int(getattr(args, "watchdog_interval", 10) or 0)
+    except (TypeError, ValueError):
+        watchdog_interval = 10
     runtime = make_runtime_manager()
     adapter = make_codex_adapter()
     upstream = resolve_proxy_upstream(getattr(args, "upstream", None), adapter, runtime)
@@ -1720,11 +1798,22 @@ def cmd_autostart(args: argparse.Namespace) -> int:
         )
         return 1
     src_root = config_home.legacy_source_root()
-    content = render_autostart_vbs(sys.executable, upstream, src_root=src_root)
+    content = render_autostart_vbs(
+        sys.executable,
+        upstream,
+        src_root=src_root,
+        watchdog_interval=watchdog_interval,
+    )
     directory.mkdir(parents=True, exist_ok=True)
     target.write_bytes(_vbs_bytes(content))
     print(f"autostart enabled (startup file: {target})")
-    print(f"  command: {sys.executable} -m agent_vision start --upstream {upstream}")
+    if watchdog_interval and watchdog_interval > 0:
+        print(
+            f"  command: {sys.executable} -m agent_vision watchdog "
+            f"--interval {watchdog_interval} --upstream {upstream}"
+        )
+    else:
+        print(f"  command: {sys.executable} -m agent_vision start --upstream {upstream}")
     return 0
 
 
@@ -1771,7 +1860,15 @@ def build_parser() -> argparse.ArgumentParser:
     autostart.add_argument("--status", action="store_true", help="show whether autostart is enabled")
     autostart.add_argument("--upstream", default=None, help="upstream URL used by the autostart proxy")
     autostart.add_argument("--startup-dir", default=None, help="override the Windows Startup folder (for testing)")
+    autostart.add_argument("--watchdog-interval", type=int, default=10, help="health-check interval in seconds; 0 disables the watchdog and uses plain start")
     autostart.set_defaults(handler=cmd_autostart)
+
+    watchdog = sub.add_parser("watchdog", help="keep the local proxy alive, restarting it if the port goes down")
+    watchdog.add_argument("--interval", type=int, default=10, help="seconds between health checks (2-30, default 10)")
+    watchdog.add_argument("--listen", default=None, help="proxy listen address, default 127.0.0.1:19100")
+    watchdog.add_argument("--upstream", default=None, help="upstream URL the proxy forwards to")
+    watchdog.add_argument("--log-file", default=None, help="watchdog log file (default: ~/.agent-vision/logs/watchdog.log)")
+    watchdog.set_defaults(handler=cmd_watchdog)
 
     doctor = sub.add_parser("doctor", help="check vision config")
     doctor.set_defaults(handler=cmd_doctor)
