@@ -161,6 +161,60 @@ class RewriteTests(unittest.TestCase):
             content = (Path(tmp) / "proxy.log").read_text(encoding="utf-8")
             self.assertIn("hello proxy", content)
 
+    def test_upstream_request_retries_then_succeeds(self):
+        calls = {"n": 0}
+
+        class FakeConn:
+            def __init__(self, host, port, timeout):
+                self.host = host
+                self.port = port
+                self.timeout = timeout
+
+            def request(self, method, path, body, headers):
+                calls["n"] += 1
+                if calls["n"] < 3:
+                    raise OSError("temporary DNS failure")
+
+            def getresponse(self):
+                return "resp"
+
+            def close(self):
+                pass
+
+        with mock.patch.object(
+            vb.http.client,
+            "HTTPSConnection",
+            side_effect=lambda *args, **kwargs: FakeConn(*args, **kwargs),
+        ):
+            conn, response = vb._upstream_request(
+                "https://api.deepseek.com", "POST", "/v1/responses", b"{}", {}, retries=3
+            )
+        self.assertEqual(calls["n"], 3)
+        self.assertEqual(response, "resp")
+        self.assertEqual(conn.host, "api.deepseek.com")
+
+    def test_upstream_request_raises_after_retries(self):
+        class AlwaysFail:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def request(self, *args, **kwargs):
+                raise OSError("boom")
+
+            def close(self):
+                pass
+
+        with mock.patch.object(
+            vb.http.client,
+            "HTTPSConnection",
+            side_effect=lambda *args, **kwargs: AlwaysFail(),
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                vb._upstream_request(
+                    "https://api.deepseek.com", "POST", "/v1/responses", b"{}", {}, retries=2
+                )
+        self.assertIn("upstream unreachable", str(ctx.exception))
+
     def test_invalid_body_passes_through(self):
         body = b"not json"
         new_body, replaced = vb.rewrite_body(body)

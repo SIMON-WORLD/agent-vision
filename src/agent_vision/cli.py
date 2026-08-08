@@ -725,6 +725,40 @@ class _ProxyLog:
                 pass
 
 
+def _upstream_request(
+    upstream: str,
+    method: str,
+    path: str,
+    body: bytes,
+    headers: dict[str, str],
+    retries: int = 3,
+) -> tuple[object, object]:
+    """Connect to the upstream with a few retries to absorb transient DNS/network errors."""
+    parsed = urlparse(upstream)
+    if parsed.scheme == "https":
+        connection_cls = http.client.HTTPSConnection
+        default_port = 443
+    else:
+        connection_cls = http.client.HTTPConnection
+        default_port = 80
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        conn = connection_cls(parsed.hostname or "127.0.0.1", parsed.port or default_port, timeout=300)
+        try:
+            conn.request(method, path, body=body, headers=headers)
+            response = conn.getresponse()
+            return conn, response
+        except Exception as error:
+            last_error = error
+            try:
+                conn.close()
+            except Exception:
+                pass
+            if attempt < retries - 1:
+                time.sleep(0.5 * (attempt + 1))
+    raise RuntimeError(f"upstream unreachable after {retries} attempts: {last_error}")
+
+
 class ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -749,28 +783,26 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 continue
             headers[key] = value
         headers["Content-Length"] = str(len(new_body))
-        parsed = urlparse(self.server.upstream)
-        if parsed.scheme == "https":
-            conn: http.client.HTTPConnection = http.client.HTTPSConnection(
-                parsed.hostname or "127.0.0.1",
-                parsed.port or 443,
-                timeout=300,
-            )
-        else:
-            conn = http.client.HTTPConnection(
-                parsed.hostname or "127.0.0.1",
-                parsed.port or 80,
-                timeout=300,
-            )
         try:
-            conn.request(self.command, self.path, body=new_body, headers=headers)
-            response = conn.getresponse()
-        except Exception as error:
+            conn, response = _upstream_request(
+                self.server.upstream,
+                self.command,
+                self.path,
+                new_body,
+                headers,
+            )
+        except RuntimeError as error:
+            message = (
+                f"{error}. This is a transient upstream DNS/network error; "
+                "your machine's network settings were not changed. "
+                "Retry or run `agent-vision doctor`."
+            )
+            payload = message.encode("utf-8", errors="replace")
             self.send_response(502)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(str(error))))
+            self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
-            self.wfile.write(str(error).encode("utf-8", errors="replace"))
+            self.wfile.write(payload)
             return
         self.send_response(response.status)
         for key, value in response.getheaders():
